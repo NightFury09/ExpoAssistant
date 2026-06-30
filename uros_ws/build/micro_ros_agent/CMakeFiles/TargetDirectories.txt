@@ -1,0 +1,10 @@
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/uninstall.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/micro_ros_agent_uninstall.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/micro_ros_agent.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/test.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/edit_cache.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/rebuild_cache.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/list_install_components.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/install.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/install/local.dir
+/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/CMakeFiles/install/strip.dir

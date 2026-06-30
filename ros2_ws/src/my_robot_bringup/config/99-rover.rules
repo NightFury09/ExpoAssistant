@@ -1,0 +1,23 @@
+# /etc/udev/rules.d/99-rover.rules
+#
+# Fixed USB port symlinks for expo_rover devices.
+# Prevents port ordering from changing when devices are hot-plugged.
+#
+# Usage:
+#   sudo cp 99-rover.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# After applying, verify with:
+#   ls -la /dev/ttyESP32 /dev/ttyLIDAR
+#
+# To find vendor/product IDs for your devices:
+#   udevadm info -a -n /dev/ttyUSB0 | grep -E "idVendor|idProduct|serial"
+# ---------------------------------------------------------------------------
+
+# ESP32 CP2102N USB-UART bridge (Silicon Labs)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="a02e846add2def11b5b185e1eb7b7d6d", \
+    SYMLINK+="ttyESP32", MODE="0666"
+
+# RPLIDAR A1M8 CP2102 USB-UART bridge (Silicon Labs)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", \
+    SYMLINK+="ttyLIDAR", MODE="0666"

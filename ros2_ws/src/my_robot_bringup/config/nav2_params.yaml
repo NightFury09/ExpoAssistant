@@ -1,0 +1,157 @@
+# FINAL CORRECTED nav2_params.yaml
+map_server:
+  ros__parameters:
+    use_sim_time: false
+    yaml_filename: "/home/rptech/ros2_ws/src/my_robot_bringup/maps/my_room_map.yaml"
+
+amcl:
+  ros__parameters:
+    use_sim_time: false
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_link"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 12.0
+    laser_min_range: 0.2
+    max_beams: 60
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.95
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.25
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: /scan
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_frequency: 20.0
+    min_x_velocity: 0.0
+    min_y_velocity: 0.0
+    min_theta_velocity: 0.0
+    max_x_velocity: 0.26
+    max_y_velocity: 0.0
+    max_theta_velocity: 1.0
+    
+    # --- TUNED PARAMETERS ---
+    acc_lim_x: 1.0          # Reduced from 2.5
+    acc_lim_y: 0.0
+    acc_lim_theta: 1.5      # Reduced from 3.2
+    decel_lim_x: -1.0         # Reduced from -2.5
+    decel_lim_y: 0.0
+    decel_lim_theta: -1.5     # Reduced from -3.2
+    
+    sim_time: 2.5           # Increased from 1.7
+
+    xy_goal_tolerance: 0.25
+    yaw_goal_tolerance: 0.25
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      critics:
+        - "GoalDist"
+        - "PathDist"
+        - "ObstacleFootprint"
+        - "BaseObstacle"
+        - "PathAlign"
+        - "GoalAlign"
+
+planner_server:
+  ros__parameters:
+    use_sim_time: false
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 3.0   # Reduced from 5.0
+      publish_frequency: 1.0  # Reduced from 2.0
+      global_frame: odom
+      robot_base_frame: base_link
+      use_sim_time: false
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      footprint: "[ [0.23, 0.23], [0.23, -0.23], [-0.23, -0.23], [-0.23, 0.23] ]"
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.35
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: false
+      footprint: "[ [0.23, 0.23], [0.23, -0.23], [-0.23, -0.23], [-0.23, 0.23] ]"
+      resolution: 0.05
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan         # <-- ADD THIS SECTION
+        scan:                             # <-- ADD THIS SECTION
+          topic: /scan                    # <-- ADD THIS SECTION
+          max_obstacle_height: 2.0        # <-- ADD THIS SECTION
+          clearing: True                  # <-- ADD THIS SECTION
+          marking: True                   # <-- ADD THIS SECTION
+          data_type: "LaserScan"          # <-- ADD THIS SECTION
+      static_layer:
+        map_subscribe_transient_local: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.35

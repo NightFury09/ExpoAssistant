@@ -1,0 +1,81 @@
+slam_toolbox:
+  ros__parameters:
+
+    # -----------------------------------------------------------------------
+    # Core frames — must match your URDF / static TF publishers
+    # -----------------------------------------------------------------------
+    odom_frame:  odom
+    map_frame:   map
+    base_frame:  base_footprint
+    scan_topic:  /scan
+
+    # -----------------------------------------------------------------------
+    # Mode: mapping (builds map from scratch)
+    # Set to 'localization' after a map has been saved and you want Nav2.
+    # -----------------------------------------------------------------------
+    mode: mapping
+
+    # -----------------------------------------------------------------------
+    # Solver — Ceres is the default and works well on Jetson hardware
+    # -----------------------------------------------------------------------
+    solver_plugin:              solver_plugins::CeresSolver
+    ceres_linear_solver:        SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner:       SCHUR_JACOBI
+    ceres_trust_strategy:       LEVENBERG_MARQUARDT
+    ceres_dogleg_type:          TRADITIONAL_DOGLEG
+    ceres_loss_function:        None
+
+    # -----------------------------------------------------------------------
+    # Lifecycle / management
+    # -----------------------------------------------------------------------
+    use_lifecycle_manager:      false
+    use_map_saver:              false
+    use_sim_time:               false
+
+    # -----------------------------------------------------------------------
+    # Scan matching settings
+    # These values are tuned for the RPLIDAR A1M8 (~7Hz, 360° scan)
+    # -----------------------------------------------------------------------
+    use_scan_matching:          true
+    use_scan_barycenter:        true
+
+    # Minimum motion before SLAM Toolbox adds a new pose node.
+    # Keep low for indoor slow-speed rovers.
+    minimum_travel_distance:    0.20   # metres
+    minimum_travel_heading:     0.174  # radians (~10 degrees)
+
+    # -----------------------------------------------------------------------
+    # Loop closure — finds when you revisit a location to correct drift
+    # -----------------------------------------------------------------------
+    loop_search_maximum_distance:  3.0
+    do_loop_closing:               true
+    loop_match_minimum_chain_size: 10
+    loop_match_maximum_variance_covariance: 3.0
+    loop_match_minimum_response_fine:       0.35
+
+    # -----------------------------------------------------------------------
+    # Scan matching fine resolution
+    # -----------------------------------------------------------------------
+    correlation_search_space_dimension:         0.5
+    correlation_search_space_resolution:        0.01
+    correlation_search_space_smear_deviation:   0.1
+
+    # -----------------------------------------------------------------------
+    # Occupancy grid resolution and update rate
+    # -----------------------------------------------------------------------
+    resolution:   0.05      # metres per cell (5cm — good for indoor)
+    map_update_interval: 5.0  # seconds between map publishes
+
+    # -----------------------------------------------------------------------
+    # Laser/scan parameters — must match RPLIDAR A1M8 specs
+    # -----------------------------------------------------------------------
+    max_laser_range:        12.0   # metres (A1M8 max = 12m)
+    minimum_time_interval:  0.5    # seconds — min time between scans for SLAM
+    transform_timeout:      0.2
+    tf_buffer_duration:     10.0
+
+    # -----------------------------------------------------------------------
+    # Throttle — reduces CPU on Orin when mapping large areas
+    # -----------------------------------------------------------------------
+    scan_buffer_size:               10
+    scan_buffer_maximum_scan_distance: 10.0

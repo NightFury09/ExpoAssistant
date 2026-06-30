@@ -1,0 +1,66 @@
+#######################################
+# Syntax Coloring Map For RMCS2303drive
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+RMCS2303	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+Serial0	KEYWORD2
+Serial_selection	KEYWORD2
+begin	KEYWORD2
+Enable_Digital_Mode	KEYWORD2
+Speed	KEYWORD2
+EncoderPosition_LPR	KEYWORD2
+EncoderPosition_CPR	KEYWORD2
+Acceleration KEYWORD2
+ProportionalGain KEYWORD2
+IntegralGain	KEYWORD2
+FeedforwardGain	KEYWORD2
+Absolute_move	KEYWORD2
+WriteSingleRegister KEYWORD2
+EncoderPosition_enable KEYWORD2
+Disable_Position_Mode KEYWORD2
+Absolute_position KEYWORD2
+ReadSingleRegister	KEYWORD2
+Modbus_string	KEYWORD2
+print_hex	KEYWORD2
+nibble	KEYWORD2
+LRC	KEYWORD2
+hexToBytes	KEYWORD2
+Speed_Feedback	KEYWORD2
+Position_Feedback KEYWORD2
+value KEYWORD2
+READ_PARAMETER	KEYWORD2
+READ_DEVICE_MODBUS_ADDRESS	KEYWORD2
+READ_INP_CONTROL_BYTE	KEYWORD2
+READ_INP_MODE_BYTE KEYWORD2
+READ_PP_GAIN_BYTE KEYWORD2
+READ_PI_GAIN_BYTE KEYWORD2
+READ_VF_GAIN_BYTE KEYWORD2
+READ_LINES_PER_ROT	KEYWORD2
+READ_TRP_ACL_WORD	KEYWORD2
+WRITE_PARAMETER	KEYWORD2
+READ_TRP_SPD_WORD	KEYWORD2
+SAVE	KEYWORD2
+RESET	KEYWORD2
+Disable_Digital_Mode	KEYWORD2
+Brake_Motor KEYWORD2
+ESTOP KEYWORD2
+STOP	KEYWORD2
+SET_HOME	KEYWORD2
+Restart	KEYWORD2
+Enable_Analog_Mode KEYWORD2
+Disable_Analog_Mode KEYWORD2
+
+#
+#######################################
+# Constants (LITERAL1)
+#######################################
+

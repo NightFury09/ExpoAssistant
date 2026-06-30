@@ -1,0 +1,13 @@
+running develop
+running egg_info
+writing rover_core.egg-info/PKG-INFO
+writing dependency_links to rover_core.egg-info/dependency_links.txt
+writing requirements to rover_core.egg-info/requires.txt
+writing top-level names to rover_core.egg-info/top_level.txt
+reading manifest file 'rover_core.egg-info/SOURCES.txt'
+writing manifest file 'rover_core.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/lib/python3.10/site-packages/rover-core.egg-link (link to .)
+
+Installed /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core
+running symlink_data

@@ -1,0 +1,1 @@
+/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros/ament_cmake_environment_hooks/local_setup.sh

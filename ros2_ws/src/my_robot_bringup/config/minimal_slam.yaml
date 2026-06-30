@@ -1,0 +1,11 @@
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: false
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link
+    scan_topic: /scan
+    transform_publish_period: 0.1 # Publish transform at 10 Hz
+    mode: mapping
+    map_update_interval: 1.0
+    resolution: 0.05

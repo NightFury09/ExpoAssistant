@@ -1,0 +1,15 @@
+package.xml
+setup.cfg
+setup.py
+resource/rover_core
+rover_core/__init__.py
+rover_core/rover_odometry.py
+rover_core/rover_teleop.py
+rover_core/teleop_diagnostic.py
+rover_core.egg-info/PKG-INFO
+rover_core.egg-info/SOURCES.txt
+rover_core.egg-info/dependency_links.txt
+rover_core.egg-info/entry_points.txt
+rover_core.egg-info/requires.txt
+rover_core.egg-info/top_level.txt
+rover_core.egg-info/zip-safe

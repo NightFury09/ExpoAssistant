@@ -1,0 +1,368 @@
+[0.339s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--symlink-install']
+[0.339s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=True, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=12, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, mixin_files=None, mixin=None, verb_parser=<colcon_mixin.mixin.mixin_argument.MixinArgumentDecorator object at 0xffff92df8340>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0xffff92dbfc10>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0xffff92dbfc10>>, mixin_verb=('build',))
+[0.418s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.419s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.419s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.419s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.419s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.419s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.419s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws'
+[0.419s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.419s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.419s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.420s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.420s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.420s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.420s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.420s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.420s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.468s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['cmake', 'python']
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'cmake'
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python'
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['python_setup_py']
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python_setup_py'
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extension 'ignore'
+[0.469s] Level 1:colcon.colcon_core.package_identification:_identify(build) ignored
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extension 'ignore'
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(install) ignored
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extension 'ignore'
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(log) ignored
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.470s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore_ament_install'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_pkg']
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_pkg'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_meta']
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_meta'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ros']
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ros'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['cmake', 'python']
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'cmake'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['python_setup_py']
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python_setup_py'
+[0.471s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extensions ['ignore', 'ignore_ament_install']
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extension 'ignore'
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extension 'ignore_ament_install'
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extensions ['colcon_pkg']
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extension 'colcon_pkg'
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extensions ['colcon_meta']
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extension 'colcon_meta'
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extensions ['ros']
+[0.472s] Level 1:colcon.colcon_core.package_identification:_identify(src/my_robot_bringup) by extension 'ros'
+[0.476s] DEBUG:colcon.colcon_core.package_identification:Package 'src/my_robot_bringup' with type 'ros.ament_python' and name 'my_robot_bringup'
+[0.476s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extensions ['ignore', 'ignore_ament_install']
+[0.476s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extension 'ignore'
+[0.476s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extension 'ignore_ament_install'
+[0.477s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extensions ['colcon_pkg']
+[0.477s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extension 'colcon_pkg'
+[0.477s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extensions ['colcon_meta']
+[0.477s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extension 'colcon_meta'
+[0.477s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extensions ['ros']
+[0.477s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_core) by extension 'ros'
+[0.478s] DEBUG:colcon.colcon_core.package_identification:Package 'src/rover_core' with type 'ros.ament_python' and name 'rover_core'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extensions ['ignore', 'ignore_ament_install']
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extension 'ignore'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extension 'ignore_ament_install'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extensions ['colcon_pkg']
+[0.479s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extension 'colcon_pkg'
+[0.479s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extensions ['colcon_meta']
+[0.479s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extension 'colcon_meta'
+[0.479s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extensions ['ros']
+[0.479s] Level 1:colcon.colcon_core.package_identification:_identify(src/rover_description) by extension 'ros'
+[0.479s] DEBUG:colcon.colcon_core.package_identification:Package 'src/rover_description' with type 'ros.ament_python' and name 'rover_description'
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extensions ['ignore', 'ignore_ament_install']
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extension 'ignore'
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extension 'ignore_ament_install'
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extensions ['colcon_pkg']
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extension 'colcon_pkg'
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extensions ['colcon_meta']
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extension 'colcon_meta'
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extensions ['ros']
+[0.480s] Level 1:colcon.colcon_core.package_identification:_identify(src/rplidar_ros) by extension 'ros'
+[0.481s] DEBUG:colcon.colcon_core.package_identification:Package 'src/rplidar_ros' with type 'ros.ament_cmake' and name 'rplidar_ros'
+[0.481s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extensions ['ignore', 'ignore_ament_install']
+[0.481s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extension 'ignore'
+[0.481s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extension 'ignore_ament_install'
+[0.481s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extensions ['colcon_pkg']
+[0.482s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extension 'colcon_pkg'
+[0.482s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extensions ['colcon_meta']
+[0.482s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extension 'colcon_meta'
+[0.482s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extensions ['ros']
+[0.482s] Level 1:colcon.colcon_core.package_identification:_identify(src/sllidar_ros2) by extension 'ros'
+[0.483s] DEBUG:colcon.colcon_core.package_identification:Package 'src/sllidar_ros2' with type 'ros.ament_cmake' and name 'sllidar_ros2'
+[0.483s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.483s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.483s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.483s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.483s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.518s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.518s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.521s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 3 installed packages in /home/rptech/microros_ws/install
+[0.523s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 272 installed packages in /opt/ros/humble
+[0.525s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'cmake_args' from command line to 'None'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'cmake_target' from command line to 'None'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'cmake_clean_cache' from command line to 'False'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'cmake_clean_first' from command line to 'False'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'cmake_force_configure' from command line to 'False'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'ament_cmake_args' from command line to 'None'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'catkin_cmake_args' from command line to 'None'
+[0.599s] Level 5:colcon.colcon_core.verb:set package 'my_robot_bringup' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.599s] DEBUG:colcon.colcon_core.verb:Building package 'my_robot_bringup' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup', 'merge_install': False, 'path': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/my_robot_bringup', 'symlink_install': True, 'test_result_base': None}
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'cmake_args' from command line to 'None'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'cmake_target' from command line to 'None'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'cmake_clean_cache' from command line to 'False'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'cmake_clean_first' from command line to 'False'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'cmake_force_configure' from command line to 'False'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'ament_cmake_args' from command line to 'None'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'catkin_cmake_args' from command line to 'None'
+[0.600s] Level 5:colcon.colcon_core.verb:set package 'rover_core' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.600s] DEBUG:colcon.colcon_core.verb:Building package 'rover_core' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core', 'merge_install': False, 'path': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rover_core', 'symlink_install': True, 'test_result_base': None}
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'cmake_args' from command line to 'None'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'cmake_target' from command line to 'None'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'cmake_clean_cache' from command line to 'False'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'cmake_clean_first' from command line to 'False'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'cmake_force_configure' from command line to 'False'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'ament_cmake_args' from command line to 'None'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'catkin_cmake_args' from command line to 'None'
+[0.601s] Level 5:colcon.colcon_core.verb:set package 'rover_description' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.601s] DEBUG:colcon.colcon_core.verb:Building package 'rover_description' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description', 'merge_install': False, 'path': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rover_description', 'symlink_install': True, 'test_result_base': None}
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'cmake_args' from command line to 'None'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'cmake_target' from command line to 'None'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'cmake_clean_cache' from command line to 'False'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'cmake_clean_first' from command line to 'False'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'cmake_force_configure' from command line to 'False'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'ament_cmake_args' from command line to 'None'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'catkin_cmake_args' from command line to 'None'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'rplidar_ros' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.602s] DEBUG:colcon.colcon_core.verb:Building package 'rplidar_ros' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros', 'merge_install': False, 'path': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rplidar_ros', 'symlink_install': True, 'test_result_base': None}
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'cmake_args' from command line to 'None'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'cmake_target' from command line to 'None'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.602s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'cmake_clean_cache' from command line to 'False'
+[0.603s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'cmake_clean_first' from command line to 'False'
+[0.603s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'cmake_force_configure' from command line to 'False'
+[0.603s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'ament_cmake_args' from command line to 'None'
+[0.603s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'catkin_cmake_args' from command line to 'None'
+[0.603s] Level 5:colcon.colcon_core.verb:set package 'sllidar_ros2' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.603s] DEBUG:colcon.colcon_core.verb:Building package 'sllidar_ros2' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2', 'merge_install': False, 'path': '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/sllidar_ros2', 'symlink_install': True, 'test_result_base': None}
+[0.603s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.605s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.605s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/my_robot_bringup' with build type 'ament_python'
+[0.605s] Level 1:colcon.colcon_core.shell:create_environment_hook('my_robot_bringup', 'ament_prefix_path')
+[0.610s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.611s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/hook/ament_prefix_path.ps1'
+[0.612s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/hook/ament_prefix_path.dsv'
+[0.613s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/hook/ament_prefix_path.sh'
+[0.614s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.614s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.619s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rover_core' with build type 'ament_python'
+[0.619s] Level 1:colcon.colcon_core.shell:create_environment_hook('rover_core', 'ament_prefix_path')
+[0.619s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/hook/ament_prefix_path.ps1'
+[0.621s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/hook/ament_prefix_path.dsv'
+[0.623s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/hook/ament_prefix_path.sh'
+[0.625s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.625s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.629s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rover_description' with build type 'ament_python'
+[0.630s] Level 1:colcon.colcon_core.shell:create_environment_hook('rover_description', 'ament_prefix_path')
+[0.630s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/hook/ament_prefix_path.ps1'
+[0.631s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/hook/ament_prefix_path.dsv'
+[0.631s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/hook/ament_prefix_path.sh'
+[0.632s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.632s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.636s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rplidar_ros' with build type 'ament_cmake'
+[0.636s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rplidar_ros'
+[0.637s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.637s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.641s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/sllidar_ros2' with build type 'ament_cmake'
+[0.641s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/sllidar_ros2'
+[0.642s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.642s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.989s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/my_robot_bringup'
+[0.990s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.990s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[1.339s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rover_core'
+[1.340s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.340s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[1.681s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rover_description'
+[1.682s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.682s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[1.702s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --build /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros -- -j12 -l12
+[1.721s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --build /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2 -- -j12 -l12
+[1.873s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --build /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2 -- -j12 -l12
+[1.888s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --install /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2
+[1.890s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --build /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros -- -j12 -l12
+[1.892s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --install /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros
+[1.926s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(sllidar_ros2)
+[1.927s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --install /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/sllidar_ros2
+[1.933s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2' for CMake module files
+[1.933s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2' for CMake config files
+[1.934s] Level 1:colcon.colcon_core.shell:create_environment_hook('sllidar_ros2', 'cmake_prefix_path')
+[1.935s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/hook/cmake_prefix_path.ps1'
+[1.936s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/hook/cmake_prefix_path.dsv'
+[1.936s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/hook/cmake_prefix_path.sh'
+[1.937s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/lib'
+[1.938s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/bin'
+[1.938s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/lib/pkgconfig/sllidar_ros2.pc'
+[1.938s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/lib/python3.10/site-packages'
+[1.939s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/bin'
+[1.939s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.ps1'
+[1.940s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.dsv'
+[1.941s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.sh'
+[1.943s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.bash'
+[1.944s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.zsh'
+[1.945s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/colcon-core/packages/sllidar_ros2)
+[1.946s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(sllidar_ros2)
+[1.947s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2' for CMake module files
+[1.948s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2' for CMake config files
+[1.948s] Level 1:colcon.colcon_core.shell:create_environment_hook('sllidar_ros2', 'cmake_prefix_path')
+[1.949s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/hook/cmake_prefix_path.ps1'
+[1.949s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/hook/cmake_prefix_path.dsv'
+[1.950s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/hook/cmake_prefix_path.sh'
+[1.951s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/lib'
+[1.951s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/bin'
+[1.951s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/lib/pkgconfig/sllidar_ros2.pc'
+[1.951s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/lib/python3.10/site-packages'
+[1.952s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/bin'
+[1.952s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.ps1'
+[1.953s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.dsv'
+[1.954s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.sh'
+[1.954s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.bash'
+[1.955s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/sllidar_ros2/package.zsh'
+[1.955s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/sllidar_ros2/share/colcon-core/packages/sllidar_ros2)
+[1.956s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(rplidar_ros)
+[1.957s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros' for CMake module files
+[1.959s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake --install /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rplidar_ros
+[1.960s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros' for CMake config files
+[1.960s] Level 1:colcon.colcon_core.shell:create_environment_hook('rplidar_ros', 'cmake_prefix_path')
+[1.960s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/hook/cmake_prefix_path.ps1'
+[1.961s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/hook/cmake_prefix_path.dsv'
+[1.962s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/hook/cmake_prefix_path.sh'
+[1.962s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/lib'
+[1.963s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/bin'
+[1.963s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/lib/pkgconfig/rplidar_ros.pc'
+[1.963s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/lib/python3.10/site-packages'
+[1.963s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/bin'
+[1.964s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.ps1'
+[1.965s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.dsv'
+[1.965s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.sh'
+[1.966s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.bash'
+[1.966s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.zsh'
+[1.967s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/colcon-core/packages/rplidar_ros)
+[1.968s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(rplidar_ros)
+[1.968s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros' for CMake module files
+[1.969s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros' for CMake config files
+[1.969s] Level 1:colcon.colcon_core.shell:create_environment_hook('rplidar_ros', 'cmake_prefix_path')
+[1.970s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/hook/cmake_prefix_path.ps1'
+[1.970s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/hook/cmake_prefix_path.dsv'
+[1.971s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/hook/cmake_prefix_path.sh'
+[1.971s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/lib'
+[1.972s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/bin'
+[1.972s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/lib/pkgconfig/rplidar_ros.pc'
+[1.972s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/lib/python3.10/site-packages'
+[1.972s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/bin'
+[1.973s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.ps1'
+[1.974s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.dsv'
+[1.974s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.sh'
+[1.975s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.bash'
+[1.975s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/rplidar_ros/package.zsh'
+[1.976s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rplidar_ros/share/colcon-core/packages/rplidar_ros)
+[2.745s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/build --no-deps symlink_data
+[2.749s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/build --no-deps symlink_data
+[2.756s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/build --no-deps symlink_data
+[3.962s] Level 1:colcon.colcon_core.shell:create_environment_hook('rover_core', 'pythonpath_develop')
+[3.963s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/share/rover_core/hook/pythonpath_develop.ps1'
+[3.964s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core' returned '0': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/build --no-deps symlink_data
+[3.964s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/share/rover_core/hook/pythonpath_develop.dsv'
+[3.965s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_core/share/rover_core/hook/pythonpath_develop.sh'
+[3.966s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core' for CMake module files
+[3.967s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core' for CMake config files
+[3.968s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/lib'
+[3.968s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/bin'
+[3.968s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/lib/pkgconfig/rover_core.pc'
+[3.968s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/lib/python3.10/site-packages'
+[3.968s] Level 1:colcon.colcon_core.shell:create_environment_hook('rover_core', 'pythonpath')
+[3.969s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/hook/pythonpath.ps1'
+[3.970s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/hook/pythonpath.dsv'
+[3.970s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/hook/pythonpath.sh'
+[3.971s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/bin'
+[3.971s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(rover_core)
+[3.972s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/package.ps1'
+[3.973s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/package.dsv'
+[3.974s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/package.sh'
+[3.974s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/package.bash'
+[3.975s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/rover_core/package.zsh'
+[3.975s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_core/share/colcon-core/packages/rover_core)
+[3.983s] Level 1:colcon.colcon_core.shell:create_environment_hook('my_robot_bringup', 'pythonpath_develop')
+[3.984s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/share/my_robot_bringup/hook/pythonpath_develop.ps1'
+[3.984s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup' returned '0': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/build --no-deps symlink_data
+[3.986s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/share/my_robot_bringup/hook/pythonpath_develop.dsv'
+[3.987s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/share/my_robot_bringup/hook/pythonpath_develop.sh'
+[3.988s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup' for CMake module files
+[3.989s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup' for CMake config files
+[3.991s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib'
+[3.991s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/bin'
+[3.991s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/pkgconfig/my_robot_bringup.pc'
+[3.992s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/python3.10/site-packages'
+[3.992s] Level 1:colcon.colcon_core.shell:create_environment_hook('my_robot_bringup', 'pythonpath')
+[3.993s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/hook/pythonpath.ps1'
+[3.994s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/hook/pythonpath.dsv'
+[3.995s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/hook/pythonpath.sh'
+[3.997s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/bin'
+[3.997s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(my_robot_bringup)
+[3.998s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/package.ps1'
+[3.999s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/package.dsv'
+[4.001s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/package.sh'
+[4.002s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/package.bash'
+[4.003s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/package.zsh'
+[4.004s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/colcon-core/packages/my_robot_bringup)
+[4.014s] Level 1:colcon.colcon_core.shell:create_environment_hook('rover_description', 'pythonpath_develop')
+[4.015s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/share/rover_description/hook/pythonpath_develop.ps1'
+[4.016s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description' returned '0': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/build --no-deps symlink_data
+[4.018s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/share/rover_description/hook/pythonpath_develop.dsv'
+[4.019s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/rover_description/share/rover_description/hook/pythonpath_develop.sh'
+[4.021s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description' for CMake module files
+[4.022s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description' for CMake config files
+[4.024s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/lib'
+[4.024s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/bin'
+[4.024s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/lib/pkgconfig/rover_description.pc'
+[4.025s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/lib/python3.10/site-packages'
+[4.025s] Level 1:colcon.colcon_core.shell:create_environment_hook('rover_description', 'pythonpath')
+[4.026s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/hook/pythonpath.ps1'
+[4.027s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/hook/pythonpath.dsv'
+[4.028s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/hook/pythonpath.sh'
+[4.031s] Level 1:colcon.colcon_core.environment:checking '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/bin'
+[4.031s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(rover_description)
+[4.032s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/package.ps1'
+[4.034s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/package.dsv'
+[4.035s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/package.sh'
+[4.037s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/package.bash'
+[4.038s] INFO:colcon.colcon_core.shell:Creating package script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/rover_description/package.zsh'
+[4.039s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/rover_description/share/colcon-core/packages/rover_description)
+[4.039s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[4.040s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[4.040s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '0'
+[4.041s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[4.059s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[4.059s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[4.059s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[4.085s] DEBUG:colcon.colcon_notification.desktop_notification.notify2:Failed to initialize notify2: org.freedesktop.DBus.Error.Spawn.ChildExited: Process org.freedesktop.Notifications exited with status 1
+[4.086s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[4.086s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/local_setup.ps1'
+[4.090s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/_local_setup_util_ps1.py'
+[4.096s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.ps1'
+[4.100s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/local_setup.sh'
+[4.103s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/_local_setup_util_sh.py'
+[4.105s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.sh'
+[4.110s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/local_setup.bash'
+[4.112s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash'
+[4.116s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/local_setup.zsh'
+[4.118s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.zsh'

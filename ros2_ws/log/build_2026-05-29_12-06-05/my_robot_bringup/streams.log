@@ -1,0 +1,16 @@
+[1.809s] Invoking command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/build --no-deps symlink_data
+[2.358s] running develop
+[2.753s] running egg_info
+[2.783s] writing my_robot_bringup.egg-info/PKG-INFO
+[2.783s] writing dependency_links to my_robot_bringup.egg-info/dependency_links.txt
+[2.784s] writing requirements to my_robot_bringup.egg-info/requires.txt
+[2.784s] writing top-level names to my_robot_bringup.egg-info/top_level.txt
+[2.847s] reading manifest file 'my_robot_bringup.egg-info/SOURCES.txt'
+[2.849s] writing manifest file 'my_robot_bringup.egg-info/SOURCES.txt'
+[2.960s] running build_ext
+[2.960s] Creating /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/python3.10/site-packages/my-robot-bringup.egg-link (link to .)
+[2.962s] 
+[2.962s] Installed /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup
+[2.962s] running symlink_data
+[2.963s] symbolically linking /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/launch/slam_teleop.launch.py -> /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/launch
+[3.095s] Invoked command in '/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup' returned '0': PYTHONPATH=/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/build --no-deps symlink_data
