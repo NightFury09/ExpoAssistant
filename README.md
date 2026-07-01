@@ -157,6 +157,8 @@ Since physical encoder outputs connect to RMCS-2303 controllers for internal PID
 
 Published as `geometry_msgs/msg/Point32` on `/wheel_ticks` (`ticks_msg.x` = Left, `ticks_msg.y` = Right).
 
+> **Encoder spec (confirmed):** RMCS-5012 encoder is 1000 PPR → 4000 CPR after quadrature decoding. `ENCODER_CPR = 4000` is correct.
+
 ---
 
 ## 4. ROS 2 Workspace Structure
@@ -194,7 +196,7 @@ ros2_ws/src/
 
 ### 5.1. Forward Kinematics (ESP32 Integration)
 
-Standard differential drive equations (L = 0.44 m wheel separation, R = 0.05 m wheel radius):
+Standard differential drive equations (L = 0.44 m wheel separation — physically measured center-to-center, R = 0.05 m wheel radius):
 
 ```
 v_left  = v - (ω × L) / 2
@@ -223,7 +225,7 @@ y(k+1) = y(k) + Δs × sin(θ(k) + Δθ/2)
 odom
  └── base_footprint          [Dynamic: rover_odometry or EKF]
       ├── base_link           [Fixed: base_joint]
-      ├── laser_frame         [Fixed: laser_joint, Z = 0.23 m]
+      ├── laser_frame         [Fixed: laser_joint, Z = 0.22 m]
       ├── left_wheel          [Continuous: left_wheel_joint, Y = +0.22 m, Z = 0.05 m]
       └── right_wheel         [Continuous: right_wheel_joint, Y = -0.22 m, Z = 0.05 m]
 ```
@@ -279,6 +281,14 @@ ros2 run rover_core rover_teleop
 ---
 
 ## 7. Diagnostics & Troubleshooting
+
+> **Note:** A navigation map (`maps/my_room_map.yaml`) has not been generated yet. Run the SLAM stack, drive the rover around the space, then save the map with:
+> ```bash
+> ros2 run nav2_map_server map_saver_cli -f ~/rover_project/ros2_ws/src/my_robot_bringup/maps/my_room_map
+> ```
+> After saving, update the map path in `config/nav2_params.yaml` before launching navigation.
+
+---
 
 **Run diagnostics to inspect latency and command execution:**
 ```bash

@@ -42,7 +42,7 @@
 // Robot Physical Constants
 // ---------------------------------------------------------------------------
 const float WHEEL_RADIUS     = 0.05f;   // metres
-const float WHEEL_SEPARATION = 0.47f;   // metres (centre-to-centre)
+const float WHEEL_SEPARATION = 0.44f;   // metres (centre-to-centre)
 const float MS_TO_RPM        = 60.0f / (2.0f * PI * WHEEL_RADIUS);
 const int   MAX_RPM          = 200;
 const int   RPM_DEADZONE     = 5;

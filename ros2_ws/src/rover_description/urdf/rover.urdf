@@ -74,8 +74,8 @@
     <!-- Attach to base_footprint so Z is absolute height from ground -->
     <parent link="base_footprint"/>
     <child link="laser_frame"/>
-    <!-- Center mounted, facing forward, exactly 23cm above ground -->
-    <origin xyz="0.0 0.0 0.23" rpy="0 0 0"/>
+    <!-- Center mounted, facing forward, exactly 22cm above ground -->
+    <origin xyz="0.0 0.0 0.22" rpy="0 0 0"/>
   </joint>
 
   <!-- ====================================================================

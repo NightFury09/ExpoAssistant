@@ -40,7 +40,7 @@ def generate_launch_description():
             executable='static_transform_publisher',
             name='laser_base_link_broadcaster',
             # IMPORTANT: Adjust these X, Y, Z offsets to match your robot's physical measurements!
-            arguments=['0.15', '0.0', '0.20', '0', '0', '0', 'base_link', LaunchConfiguration('frame_id')]
+            arguments=['0.15', '0.0', '0.22', '0', '0', '0', 'base_link', LaunchConfiguration('frame_id')]
         ),
         
         # --- Node 2: A static transform for odom, required by SLAM Toolbox ---
