@@ -42,7 +42,7 @@ const int   RPM_DEADZONE     = 5;
 // ===========================================================================
 // Direction Calibration — flip these if a motor runs backwards
 // ===========================================================================
-const bool LEFT_MOTOR_INVERTED  = true;
+const bool LEFT_MOTOR_INVERTED  = false;
 const bool RIGHT_MOTOR_INVERTED = false;
 
 // ===========================================================================

@@ -53,7 +53,7 @@ const int   RPM_DEADZONE     = 5;
 // set LEFT_MOTOR_INVERTED to true.
 // Run motor_calibration.ino first to determine the correct value.
 // ---------------------------------------------------------------------------
-const bool LEFT_MOTOR_INVERTED  = true;   // true = flip left motor direction
+const bool LEFT_MOTOR_INVERTED  = false;   // true = flip left motor direction
 const bool RIGHT_MOTOR_INVERTED = false;  // typically false
 
 // ---------------------------------------------------------------------------
