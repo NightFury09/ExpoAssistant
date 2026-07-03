@@ -2,7 +2,7 @@
 map_server:
   ros__parameters:
     use_sim_time: false
-    yaml_filename: "/home/rptech/ros2_ws/src/my_robot_bringup/maps/my_room_map.yaml"
+    yaml_filename: "/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/my_robot_bringup/maps/my_room_map.yaml"
 
 amcl:
   ros__parameters:
