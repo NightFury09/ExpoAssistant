@@ -42,7 +42,7 @@ const int   RPM_DEADZONE     = 5;
 // ===========================================================================
 // Direction Calibration — flip these if a motor runs backwards
 // ===========================================================================
-const bool LEFT_MOTOR_INVERTED  = false;
+const bool LEFT_MOTOR_INVERTED  = true;
 const bool RIGHT_MOTOR_INVERTED = false;
 
 // ===========================================================================
@@ -281,7 +281,6 @@ void setup() {
     stop_motors_immediate();
     delay(200);
 
-    Serial.println("ESP32 Rover Firmware v5 (Clean State Machine)");
     set_microros_transports();
 }
 
