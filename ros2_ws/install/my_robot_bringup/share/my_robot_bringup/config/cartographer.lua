@@ -1,1 +1,0 @@
-/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/build/my_robot_bringup/config/cartographer.lua

@@ -1,1 +1,0 @@
-/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/my_robot_bringup/scripts/esp32_reset.py

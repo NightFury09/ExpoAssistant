@@ -1,1 +1,0 @@
-/home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/src/rplidar_ros/launch/view_rplidar_c1_launch.py

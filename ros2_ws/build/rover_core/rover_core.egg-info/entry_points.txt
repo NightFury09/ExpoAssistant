@@ -1,3 +1,0 @@
-[console_scripts]
-rover_odometry = rover_core.rover_odometry:main
-rover_teleop = rover_core.rover_teleop:main
