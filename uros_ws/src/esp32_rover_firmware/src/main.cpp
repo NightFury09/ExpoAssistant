@@ -42,7 +42,7 @@ const int   RPM_DEADZONE     = 5;
 // ===========================================================================
 // Direction Calibration — flip these if a motor runs backwards
 // ===========================================================================
-const bool LEFT_MOTOR_INVERTED  = true;
+const bool LEFT_MOTOR_INVERTED  = false;
 const bool RIGHT_MOTOR_INVERTED = false;
 
 // ===========================================================================
@@ -315,8 +315,8 @@ void loop() {
             break;
         }
 
-        // Process new velocity command
-        if (g_new_cmd) {
+        // Process new velocity command — only when state machine is idle
+        if (g_new_cmd && mc_state == MC_IDLE) {
             g_new_cmd     = false;
             g_last_cmd_ms = millis();
             command_motors(g_left_rpm, g_right_rpm);

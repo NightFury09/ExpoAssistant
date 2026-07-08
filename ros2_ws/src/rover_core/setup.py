@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'rover_teleop = rover_core.rover_teleop:main',
+            'rover_teleop_v2 = rover_core.rover_teleop_v2:main',
             'rover_odometry = rover_core.rover_odometry:main',
         ],
     },

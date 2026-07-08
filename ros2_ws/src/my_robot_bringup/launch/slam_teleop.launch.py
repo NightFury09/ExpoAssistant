@@ -100,6 +100,8 @@ def generate_launch_description():
 
     # -------------------------------------------------------------------------
     # Node 5: SLAM Toolbox — builds /map from /scan
+    # Delayed 10s: gives ESP32 time to boot, connect to agent, publish /wheel_ticks
+    # so rover_odometry publishes odom->base_footprint before SLAM tries to use it.
     # -------------------------------------------------------------------------
     slam_toolbox_node = Node(
         package='slam_toolbox',
@@ -107,6 +109,10 @@ def generate_launch_description():
         name='slam_toolbox',
         parameters=[slam_params_file, {'use_sim_time': False}],
         output='screen'
+    )
+    delayed_slam = TimerAction(
+        period=10.0,
+        actions=[slam_toolbox_node]
     )
 
     # -------------------------------------------------------------------------
@@ -148,7 +154,7 @@ def generate_launch_description():
         robot_state_publisher_node,
         rover_odometry_node,
         rplidar_node,
-        slam_toolbox_node,
+        delayed_slam,
         foxglove_bridge_node,
         print_url_action,
     ])
