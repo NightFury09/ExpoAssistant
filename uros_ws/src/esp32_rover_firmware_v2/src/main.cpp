@@ -5,9 +5,10 @@
  * Every command writes speed → flush+60ms → direction → done.
  * Guaranteed correct Modbus frame ordering every time.
  *
- * Motor direction (physically confirmed via motor_test v3):
- *   LEFT  motor: UART1/ID=7, CW=forward              → LEFT_MOTOR_INVERTED  = false
- *   RIGHT motor: UART2/ID=2, CCW=forward (inverted)  → RIGHT_MOTOR_INVERTED = true
+ * Physical wheel mapping (confirmed by live teleop — turns were reversed until
+ * left/right were swapped to match the hardware):
+ *   LEFT  wheel: pins 14/13, slave ID 2, CCW=forward → inverted = true
+ *   RIGHT wheel: pins 16/17, slave ID 7, CW=forward  → inverted = false
  */
 
 #include <Arduino.h>
@@ -29,8 +30,12 @@
 #define MODBUS_BAUD_RATE 9600
 #define LED_BUILTIN      2
 
-#define LEFT_MOTOR_SLAVE_ID   7
-#define RIGHT_MOTOR_SLAVE_ID  2
+// Physical wheel mapping (confirmed by teleop: forward/back OK, turns were
+// reversed until swapped). The physical LEFT wheel is the slave-2 driver on
+// pins 14/13; the physical RIGHT wheel is the slave-7 driver on pins 16/17.
+// Do NOT "correct" these back to 7/2 — that re-reverses the turn direction.
+#define LEFT_MOTOR_SLAVE_ID   2
+#define RIGHT_MOTOR_SLAVE_ID  7
 
 // ===========================================================================
 // Robot constants
@@ -38,7 +43,7 @@
 const float WHEEL_RADIUS     = 0.05f;
 const float WHEEL_SEPARATION = 0.44f;
 const float MS_TO_RPM        = 60.0f / (2.0f * PI * WHEEL_RADIUS);
-const int   MAX_RPM          = 200;
+const int   MAX_RPM          = 400;   // safety ceiling; teleop stays well under this
 const int   RPM_DEADZONE     = 5;
 const float ENCODER_CPR      = 4000.0f;
 
@@ -57,8 +62,8 @@ const float ENCODER_CPR      = 4000.0f;
 // ===========================================================================
 // Serial ports
 // ===========================================================================
-HardwareSerial motorSerialL(1);
-HardwareSerial motorSerialR(2);
+HardwareSerial motorSerialL(2);   // physical LEFT  wheel — UART2 on pins 14/13, slave 2
+HardwareSerial motorSerialR(1);   // physical RIGHT wheel — UART1 on pins 16/17, slave 7
 
 // ===========================================================================
 // micro-ROS objects
@@ -255,9 +260,9 @@ void apply_command(int left, int right) {
     // Stagger L then R by one mbus round-trip (~60ms) to avoid simultaneous
     // startup inrush on both drivers at the same instant.
     mbus_send(motorSerialL, LEFT_MOTOR_SLAVE_ID,  REG_CONTROL,
-              (left  != 0) ? dir_cmd(left,  false) : CTRL_STOP);
+              (left  != 0) ? dir_cmd(left,  true)  : CTRL_STOP);  // slave 2 motor is inverted
     mbus_send(motorSerialR, RIGHT_MOTOR_SLAVE_ID, REG_CONTROL,
-              (right != 0) ? dir_cmd(right, true)  : CTRL_STOP);
+              (right != 0) ? dir_cmd(right, false) : CTRL_STOP);  // slave 7 motor is not inverted
 
     cur_left       = left;
     cur_right      = right;
@@ -329,8 +334,8 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 
-    motorSerialL.begin(MODBUS_BAUD_RATE, SERIAL_8N1, RX1_PIN, TX1_PIN);
-    motorSerialR.begin(MODBUS_BAUD_RATE, SERIAL_8N1, RX2_PIN, TX2_PIN);
+    motorSerialL.begin(MODBUS_BAUD_RATE, SERIAL_8N1, RX2_PIN, TX2_PIN); // LEFT  wheel = pins 14/13
+    motorSerialR.begin(MODBUS_BAUD_RATE, SERIAL_8N1, RX1_PIN, TX1_PIN); // RIGHT wheel = pins 16/17
     delay(100);
 
     // Force a stop at boot — drivers may still be running from before an

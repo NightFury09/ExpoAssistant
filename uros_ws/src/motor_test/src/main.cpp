@@ -349,6 +349,143 @@ void loop() {
     delay(10000);
 }
 
+// =============================================================================
+// Phase 6 — Motor health report card
+// Runs each motor through repeated forward/reverse drives from a full stop and
+// grades: (1) does it move, (2) is speed regulation repeatable, (3) is
+// direction deterministic, (4) do the two commands give OPPOSITE directions.
+// Prints an explicit PASS/FAIL verdict per motor.
+// =============================================================================
+#elif TEST_PHASE == 6
+
+bool mread(HardwareSerial &port, byte slave, int reg, uint16_t &val) {
+    while (port.available()) port.read();
+    byte sum = slave + 0x03 + ((reg >> 8) & 0xFF) + (reg & 0xFF) + 0x00 + 0x01;
+    byte lrc = (byte)((~sum) + 1);
+    char f[20];
+    snprintf(f, sizeof(f), ":%02X03%04X0001%02X\r\n", slave, reg, lrc);
+    port.print(f);
+    port.flush();
+    unsigned long dl = millis() + 150;
+    char buf[24]; int n = 0;
+    while (millis() < dl) {
+        while (port.available()) {
+            char c = port.read();
+            if (n < 23) buf[n++] = c;
+            if (c == '\n') {
+                buf[n] = 0;
+                if (n < 13 || buf[0] != ':') return false;
+                auto h2 = [&](int i) -> byte {
+                    char h[3] = {buf[i], buf[i+1], 0};
+                    return (byte)strtol(h, NULL, 16);
+                };
+                if (h2(3) != 3 || h2(5) != 2) return false;
+                val = ((uint16_t)h2(7) << 8) | h2(9);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Full 32-bit position — read only when the motor is stopped (no tearing).
+long read_pos(HardwareSerial &port, byte slave) {
+    uint16_t lsb = 0, msb = 0;
+    if (!mread(port, slave, 20, lsb)) return 0x7FFFFFFF;
+    delay(20);
+    if (!mread(port, slave, 22, msb)) return 0x7FFFFFFF;
+    return (long)(((uint32_t)msb << 16) | lsb);
+}
+
+// One stopped-to-stopped run at TEST_RPM in the given raw direction.
+// Returns net encoder displacement (0x7FFFFFFF sentinel if a read failed).
+long run_once(HardwareSerial &port, byte slave, unsigned int dir) {
+    long p0 = read_pos(port, slave);
+    if (p0 == 0x7FFFFFFF) return 0x7FFFFFFF;
+    mbus(port, slave, REG_SPEED, TEST_RPM, "spd");
+    mbus(port, slave, REG_CTRL,  dir,      "run");
+    delay(2000);
+    mbus(port, slave, REG_SPEED, 0,        "zero");
+    mbus(port, slave, REG_CTRL,  CTRL_STOP,"stop");
+    delay(1500);
+    long p1 = read_pos(port, slave);
+    if (p1 == 0x7FFFFFFF) return 0x7FFFFFFF;
+    return p1 - p0;
+}
+
+void health_check(const char *name, HardwareSerial &port, byte slave) {
+    // At 50 RPM for 2s with a 334-line (1336 count/rev) encoder we expect
+    // ~2230 counts. 500 gives clean separation from noise/no-motion.
+    const long MOVE_THRESH = 500;   // counts — below this = "no motion"
+    Serial.printf("\n========================================\n");
+    Serial.printf("  MOTOR HEALTH REPORT — %s (ID=%d)\n", name, slave);
+    Serial.printf("========================================\n");
+
+    // --- Confirm the drive is reachable and read its config ---
+    uint16_t lines = 0, pgain = 0;
+    bool comms = mread(port, slave, 10, lines) && mread(port, slave, 4, pgain);
+    if (!comms) {
+        Serial.printf("  COMMS: NO RESPONSE — driver unpowered or unwired.\n");
+        Serial.printf("  VERDICT: CANNOT TEST\n");
+        return;
+    }
+    Serial.printf("  Comms OK | LINES/rot=%u  P-gain=%u\n", lines, pgain);
+
+    // baseline stop
+    mbus(port, slave, REG_SPEED, 0, "zero");
+    mbus(port, slave, REG_CTRL, CTRL_STOP, "stop");
+    delay(1500);
+
+    // --- 3 runs each direction ---
+    long cw[3], ccw[3];
+    Serial.printf("  Running 3x CW (0x0101) and 3x CCW (0x0109)...\n");
+    for (int i = 0; i < 3; i++) cw[i]  = run_once(port, slave, CTRL_CW);
+    for (int i = 0; i < 3; i++) ccw[i] = run_once(port, slave, CTRL_CCW);
+
+    Serial.printf("  CW  deltas: %9ld %9ld %9ld\n", cw[0], cw[1], cw[2]);
+    Serial.printf("  CCW deltas: %9ld %9ld %9ld\n", ccw[0], ccw[1], ccw[2]);
+
+    // --- Grade ---
+    auto sign = [](long v) -> int { return (v > 500) ? 1 : (v < -500) ? -1 : 0; };
+    bool moved = true;
+    for (int i = 0; i < 3; i++) {
+        if (labs(cw[i]) < MOVE_THRESH || labs(ccw[i]) < MOVE_THRESH) moved = false;
+    }
+    bool cw_consistent  = (sign(cw[0])  != 0 && sign(cw[0])  == sign(cw[1])  && sign(cw[1])  == sign(cw[2]));
+    bool ccw_consistent = (sign(ccw[0]) != 0 && sign(ccw[0]) == sign(ccw[1]) && sign(ccw[1]) == sign(ccw[2]));
+    bool opposite = (cw_consistent && ccw_consistent && sign(cw[0]) != sign(ccw[0]));
+
+    // speed regulation: CW magnitudes within 30% of their mean
+    long m = (labs(cw[0]) + labs(cw[1]) + labs(cw[2])) / 3;
+    bool speed_ok = m > 0;
+    for (int i = 0; i < 3; i++) if (labs(labs(cw[i]) - m) > (m * 3 / 10)) speed_ok = false;
+
+    Serial.printf("  ----------------------------------------\n");
+    Serial.printf("  [%s] Motor spins under command\n",        moved ? "PASS" : "FAIL");
+    Serial.printf("  [%s] Speed regulation repeatable (±30%%)\n", speed_ok ? "PASS" : "FAIL");
+    Serial.printf("  [%s] CW  direction deterministic\n",      cw_consistent  ? "PASS" : "FAIL");
+    Serial.printf("  [%s] CCW direction deterministic\n",      ccw_consistent ? "PASS" : "FAIL");
+    Serial.printf("  [%s] CW and CCW are OPPOSITE\n",          opposite ? "PASS" : "FAIL");
+    Serial.printf("  ----------------------------------------\n");
+    if (moved && speed_ok && opposite)
+        Serial.printf("  VERDICT: MOTOR FUNCTIONAL — direction reliable\n");
+    else if (moved && speed_ok && !opposite)
+        Serial.printf("  VERDICT: SPINS + REGULATES, but DIRECTION UNRELIABLE\n"
+                      "           (closed-loop cannot resolve direction —\n"
+                      "            encoder feedback or drive logic fault)\n");
+    else if (!moved)
+        Serial.printf("  VERDICT: MOTOR DOES NOT SPIN RELIABLY (power/wiring)\n");
+    else
+        Serial.printf("  VERDICT: FAULTY — see failed criteria above\n");
+}
+
+void loop() {
+    health_check("LEFT",  portL, LEFT_ID);
+    health_check("RIGHT", portR, RIGHT_ID);
+    Serial.printf("\n=== full health cycle done — repeating in 12s ===\n\n");
+    delay(12000);
+}
+
 #else
-#error "Define TEST_PHASE=1..5 via build_flags"
+#error "Define TEST_PHASE=1..6 via build_flags"
 #endif
