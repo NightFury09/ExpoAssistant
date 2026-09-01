@@ -210,8 +210,14 @@ static inline unsigned int dir_cmd(int rpm, bool inverted) {
 // ===========================================================================
 void stop_motors() {
     if (motors_stopped) return;  // Already stopped — don't spam the bus
-    mbus_pair(REG_SPEED, 0, 0);           // Target speed → 0 (PID ramps down)
-    mbus_pair(REG_CONTROL, CTRL_STOP, CTRL_STOP);  // 0x0000 — full disable
+    // Brake BOTH wheels to zero under active PID control (leave them ENABLED),
+    // hold briefly so they come to rest TOGETHER, then release. Disabling
+    // immediately (as before) let whichever wheel still had momentum free-wheel
+    // and coast while the other stopped dead — that asymmetry pulled the rover
+    // off-heading at every stop. Keeping both enabled brakes them symmetrically.
+    mbus_pair(REG_SPEED, 0, 0);            // target 0, still enabled → active brake
+    delay(300);                            // both decelerate together under control
+    mbus_pair(REG_CONTROL, CTRL_STOP, CTRL_STOP);  // release once at rest — no residual coast
     cur_left       = 0;
     cur_right      = 0;
     motors_stopped = true;
