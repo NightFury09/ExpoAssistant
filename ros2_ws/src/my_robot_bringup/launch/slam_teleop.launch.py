@@ -80,6 +80,10 @@ def generate_launch_description():
 
     # -------------------------------------------------------------------------
     # Node 4: RPLIDAR A1M8
+    # Delayed 5s and respawn-enabled: the ESP32 hardware reset at t=0 briefly
+    # disturbs the USB bus, which can make the lidar node fail to open its port
+    # and never come up. Starting it after the bus settles (and retrying on
+    # failure) makes the one-command bringup reliable.
     # auto_standby=True: Motor stops when no one subscribes to /scan
     # -------------------------------------------------------------------------
     rplidar_node = Node(
@@ -95,7 +99,13 @@ def generate_launch_description():
             'inverted':         False,
             'auto_standby':     True,
         }],
+        respawn=True,
+        respawn_delay=3.0,
         output='screen'
+    )
+    delayed_rplidar = TimerAction(
+        period=5.0,
+        actions=[rplidar_node]
     )
 
     # -------------------------------------------------------------------------
@@ -153,7 +163,7 @@ def generate_launch_description():
         delayed_micro_ros,
         robot_state_publisher_node,
         rover_odometry_node,
-        rplidar_node,
+        delayed_rplidar,
         delayed_slam,
         foxglove_bridge_node,
         print_url_action,
