@@ -5,6 +5,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Point32, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64
 from tf2_ros import TransformBroadcaster
 
 class RoverOdometry(Node):
@@ -12,8 +13,16 @@ class RoverOdometry(Node):
         super().__init__('rover_odometry')
 
         # Parameters
-        self.declare_parameter('wheel_radius', 0.05)
-        self.declare_parameter('wheel_separation', 0.44)
+        # Calibrated 2026: raw model (0.05) over-reported distance ~1.94x on a
+        # 1 m test drive (odom read 1.94 m). Effective radius = 0.05 / 1.94.
+        # This corrects both linear distance and rotation (heading scales with R).
+        # Refine with a longer (3 m) calibration drive: new value = old / (odom_x / real_x).
+        self.declare_parameter('wheel_radius', 0.0257)
+        # Calibrated 2026 against the raw 0.44 model, which over-reported
+        # rotation ~5%: a 360 deg spin read 377.7, a 720 deg spin read 756.2
+        # (both -> 0.44 * reading/actual ~= 0.4621). Larger separation reduces
+        # reported rotation per wheel-speed difference.
+        self.declare_parameter('wheel_separation', 0.4621)
         self.declare_parameter('encoder_cpr', 4000.0) # Counts per revolution (LPR * 4)
 
         self.R = self.get_parameter('wheel_radius').value
@@ -36,6 +45,8 @@ class RoverOdometry(Node):
         )
         self.pub_odom = self.create_publisher(Odometry, '/odom', 10)
         self.pub_joints = self.create_publisher(JointState, '/joint_states', 10)
+        # Accumulated (unwrapped) heading in degrees — for rotation calibration.
+        self.pub_heading = self.create_publisher(Float64, '/heading_deg', 10)
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.get_logger().info("Rover Odometry Node Started.")
@@ -116,6 +127,9 @@ class RoverOdometry(Node):
         odom.twist.twist.angular.z = w
 
         self.pub_odom.publish(odom)
+
+        # Publish accumulated heading in degrees (unwrapped) for calibration
+        self.pub_heading.publish(Float64(data=math.degrees(self.th)))
 
         # Publish TF
         t = TransformStamped()
