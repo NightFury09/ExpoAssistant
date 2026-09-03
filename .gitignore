@@ -9,3 +9,6 @@ ros2_ws/log/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Saved maps (regenerable output)
+maps/

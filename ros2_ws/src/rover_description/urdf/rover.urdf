@@ -31,6 +31,18 @@
         <color rgba="0.2 0.2 0.2 1.0"/>
       </material>
     </visual>
+    <!-- Front indicator: bright green nub at +X so 'forward' is obvious in the
+         viewer. The chassis box is symmetric front-to-back with no other cue,
+         which is why the front/back looks ambiguous. Purely cosmetic. -->
+    <visual>
+      <geometry>
+        <box size="0.06 0.14 0.08"/>
+      </geometry>
+      <origin xyz="0.205 0 0.20" rpy="0 0 0"/>
+      <material name="front_green">
+        <color rgba="0.1 0.9 0.2 1.0"/>
+      </material>
+    </visual>
     <collision>
       <geometry>
         <box size="0.43 0.44 0.23"/>
