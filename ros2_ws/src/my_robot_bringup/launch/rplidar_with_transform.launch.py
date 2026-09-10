@@ -14,7 +14,7 @@ def generate_launch_description():
     inverted = LaunchConfiguration('inverted', default='false')
     angle_compensate = LaunchConfiguration('angle_compensate', default='true')
     # This is the key parameter that worked in the generic launch file
-    scan_mode = LaunchConfiguration('scan_mode', default='Sensitivity') 
+    scan_mode = LaunchConfiguration('scan_mode', default='Express') 
     
     return LaunchDescription([
         # --- Declare launch arguments so they can be seen by 'ros2 launch -s' ---
@@ -31,7 +31,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'angle_compensate', default_value='true', description='Specifying whether or not to enable angle_compensate of scan data'),
         DeclareLaunchArgument(
-            'scan_mode', default_value='Sensitivity', description='Specifying scan mode of lidar'),
+            'scan_mode', default_value='Express', description='Specifying scan mode of lidar'),
 
         # --- Node 1: The Static Transform Publisher (from our original custom file) ---
         # This node is CRUCIAL for SLAM. It tells ROS where the LIDAR is on the robot.

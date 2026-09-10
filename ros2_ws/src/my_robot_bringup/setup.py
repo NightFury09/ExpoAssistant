@@ -8,7 +8,6 @@ setup(
     name=package_name,
     version='0.0.0',
     packages=find_packages(exclude=['test']),
-    scripts=['scripts/esp32_reset.py'],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -28,6 +27,11 @@ setup(
     license='TODO: License declaration',
     entry_points={
         'console_scripts': [
+            # Installed as an entry point, NOT via scripts=[]: setuptools
+            # rewrites a script's shebang to '#!python', which does not exist
+            # on Ubuntu 22.04 (only python3). execve then fails with ENOENT and
+            # launch reports a confusing 'No such file or directory'.
+            'esp32_reset.py = my_robot_bringup.esp32_reset:main',
         ],
     },
 )

@@ -86,8 +86,24 @@
     <!-- Attach to base_footprint so Z is absolute height from ground -->
     <parent link="base_footprint"/>
     <child link="laser_frame"/>
-    <!-- Center mounted, facing forward, exactly 22cm above ground -->
-    <origin xyz="0.0 0.0 0.22" rpy="0 0 0"/>
+    <!-- Measured 2026-09-07, corrected after a direct test.
+         The lidar sits at the REAR of the deck and is yawed 180 deg.
+         Deck is 44x44 cm, so the chassis centre puts the rear edge at -0.22 m.
+         The puck spans 2-11 cm from that rear edge -> centre at
+         -0.22 + 0.065 = -0.155 m. Laterally centred.
+         Yaw: a person standing 1 m in FRONT of the rover appeared centred on
+         180 deg in the scan, so the sensor's 0 deg faces backwards.
+         Consistency checks that all agree with rear + 180 deg:
+           - front deck corners predicted at +/-149.6 deg, 0.435 m; measured
+             0.42-0.45 m at +/-144..159 (these are the purple corner bumpers)
+           - the mast, 22.5 cm forward of the lidar, lands at 180 deg in lidar
+             frame; the +/-170..180 deg bins are missing about half their
+             returns, which is that mast
+         Earlier this read "0.155 0.0 0.22" with zero yaw. Note the corner-bumper
+         geometry ALONE cannot tell "front facing forward" from "rear facing
+         backward" -- both predict +/-149.6 deg. Only the object-in-front test
+         distinguishes them. -->
+    <origin xyz="-0.155 0.0 0.275" rpy="0 0 3.14159265"/>
   </joint>
 
   <!-- ====================================================================

@@ -11,5 +11,9 @@ ekf_filter_node:
     odom0_relative: false
 
     odom_frame: odom
-    base_link_frame: base_link
+    # EKF owns odom->base_footprint. The URDF then chains base_footprint->base_link,
+    # and AMCL provides map->odom. rover_odometry runs with publish_tf:=false so it
+    # does not also publish odom->base_footprint (which would give base_footprint
+    # two parents). Single, clean TF chain for Nav2.
+    base_link_frame: base_footprint
     world_frame: odom

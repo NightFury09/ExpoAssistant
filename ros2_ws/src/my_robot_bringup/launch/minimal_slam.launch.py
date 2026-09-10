@@ -25,7 +25,7 @@ def generate_launch_description():
             'serial_port': '/dev/ttyLIDAR', # Ensure this is your LIDAR's port
             'frame_id': 'laser_frame',
             'angle_compensate': True,
-            'scan_mode': 'Sensitivity'
+            'scan_mode': 'Express'
         }],
         output='screen'
     )

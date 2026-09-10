@@ -40,48 +40,12 @@
 // ===========================================================================
 // Robot constants
 // ===========================================================================
-const float WHEEL_RADIUS     = 0.05f;   // measured: 10 cm diameter wheels
-// Matches rover_odometry's calibrated value so the firmware and the Jetson
-// agree on what an angular velocity means.
-const float WHEEL_SEPARATION = 0.4495f;
-// Motor revolutions per WHEEL revolution. Derived 2026-09-08: a calibration
-// drive gave 2737 encoder counts per wheel revolution, and the drive's encoder
-// is 1336 counts per MOTOR revolution (RMCS-2303, 334 lines x4), so
-// 2737 / 1336 = 2.049.
-// Without this the speed command was HALVED at the wheel: a commanded 0.12 m/s
-// produced ~0.056 m/s on the floor. Under Nav2 that is worse than just being
-// slow -- DWB simulates trajectories assuming the robot reaches the commanded
-// velocity, and when odometry reports half of it every prediction overshoots,
-// so the controller continuously corrects and re-plans. That is the
-// "second-guessing and stopping" behaviour.
-const float GEAR_RATIO       = 2.049f;
-const float MS_TO_RPM        = GEAR_RATIO * 60.0f / (2.0f * PI * WHEEL_RADIUS);
+const float WHEEL_RADIUS     = 0.05f;
+const float WHEEL_SEPARATION = 0.44f;
+const float MS_TO_RPM        = 60.0f / (2.0f * PI * WHEEL_RADIUS);
 const int   MAX_RPM          = 400;   // safety ceiling; teleop stays well under this
 const int   RPM_DEADZONE     = 5;
-// Encoder steps per MOTOR revolution: RMCS-2303 high-precision encoder is
-// 334 lines, quadrature -> 334*4 = 1336 (manual section on Address 10).
-// Only used by the old open-loop path; /wheel_ticks now carries raw counts
-// and rover_odometry owns the ticks->metres conversion.
-const float ENCODER_CPR      = 1336.0f;
-// Encoder poll period.
-//
-// 250ms, NOT 150ms. This was 150 and it broke the robot: two mbus_read_pair
-// calls cost ~70-200ms of blocking serial time, so at a 150ms interval the next
-// poll begins about as soon as the last one ends. The loop is then saturated
-// with blocking Modbus, rclc_executor_spin_some gets starved, agent pings time
-// out, and the micro-ROS SESSION IS TORN DOWN AND REBUILT EVERY ~12 SECONDS.
-// Each teardown destroys the /cmd_vel subscription, so the ESP32 stops
-// receiving commands, the 1s watchdog halts the motors, and the rover moves in
-// brief bursts then freezes. Measured: commanded 0.6 m over 4 s, travelled
-// 7.9 cm, all in one 0.5 s burst.
-//
-// At 250ms the poll is roughly 30-40% duty and the link is stable. That still
-// gives 4Hz odometry, twice the old 500ms rate.
-//
-// If you ever shorten this, watch the agent log for
-// "destroy_session / establish_session" pairs -- that is the failure signature,
-// and it looks like a navigation problem, not a firmware one.
-const unsigned long ENC_POLL_MS = 250;
+const float ENCODER_CPR      = 4000.0f;
 
 // ===========================================================================
 // RMCS-2303 Modbus registers
@@ -111,15 +75,6 @@ rcl_node_t                  node;
 rcl_subscription_t          subscriber_twist;
 geometry_msgs__msg__Twist   twist_msg_buf;
 rcl_publisher_t             publisher_ticks;
-// Diagnostics: without this we can only INFER what the ESP32 is doing from the
-// outside, which cost hours of guessing. Publishes on /rover_diag at 2Hz:
-//   x = /cmd_vel messages received since boot
-//   y = watchdog stop events since boot
-//   z = cur_left (what the firmware believes it last commanded, RPM)
-rcl_publisher_t             publisher_diag;
-geometry_msgs__msg__Point32 diag_msg;
-volatile unsigned long      g_cmd_count = 0;
-volatile unsigned long      g_wdog_count = 0;
 geometry_msgs__msg__Point32 ticks_msg;
 rcl_publisher_t             publisher_enc;
 geometry_msgs__msg__Point32 enc_msg;      // Real encoder counts: x=left, y=right, z=fault flags
@@ -131,12 +86,7 @@ volatile int  g_left_rpm  = 0;
 volatile int  g_right_rpm = 0;
 volatile bool g_new_cmd   = false;
 unsigned long g_last_cmd_ms = 0;
-// 1500ms, was 1000. The micro-ROS serial transport drops the occasional
-// /cmd_vel while the loop is inside a blocking Modbus poll, and a 1s watchdog
-// turned each of those into a full motor stop. At ~0.2 m/s the extra 0.5s of
-// tolerance is ~10cm of uncommanded travel in a genuine comms failure, which is
-// an acceptable trade for not stalling constantly during normal operation.
-const unsigned long CMD_WATCHDOG_MS = 1500;
+const unsigned long CMD_WATCHDOG_MS = 1000;
 
 int  cur_left       = 0;
 int  cur_right      = 0;
@@ -241,10 +191,7 @@ static void mbus_read_pair(int reg, uint16_t &val_l, uint16_t &val_r,
     mbus_read_request(motorSerialR, RIGHT_MOTOR_SLAVE_ID, reg);
     motorSerialL.flush();
     motorSerialR.flush();
-    // 60ms, not 100. At 9600 baud a request+response round trip is ~35ms, so
-    // 60ms is ample for a healthy read and halves the cost of a failed one --
-    // and a failed read must not stall the micro-ROS transport.
-    unsigned long deadline = millis() + 60;
+    unsigned long deadline = millis() + 100;
     ok_l = mbus_read_response(motorSerialL, LEFT_MOTOR_SLAVE_ID,  val_l, deadline);
     ok_r = mbus_read_response(motorSerialR, RIGHT_MOTOR_SLAVE_ID, val_r, deadline);
 }
@@ -269,26 +216,7 @@ void stop_motors() {
     // and coast while the other stopped dead — that asymmetry pulled the rover
     // off-heading at every stop. Keeping both enabled brakes them symmetrically.
     mbus_pair(REG_SPEED, 0, 0);            // target 0, still enabled → active brake
-    // Hold ~300ms so both wheels come to rest together -- but SERVICE micro-ROS
-    // while waiting instead of delay(300).
-    //
-    // delay(300) here was a 300ms total blackout of the serial transport, and it
-    // ran from inside the watchdog handler, which made it self-reinforcing: a
-    // brief gap in /cmd_vel fired the watchdog -> stop_motors blacked out the
-    // transport for 300ms -> more messages lost -> watchdog fired again. The
-    // rover would move in a burst and then sit still while commands streamed in.
-    // Measured before this fix: commanded 0.6 m over 4 s, travelled 0.235 m,
-    // all of it in one 1.5 s burst. Intermittent, which is what made it look
-    // like a Nav2 or localisation problem rather than a firmware one.
-    {
-        unsigned long brake_until = millis() + 300;
-        while ((long)(brake_until - millis()) > 0) {
-            if (agentState == AGENT_CONNECTED) {
-                rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
-            }
-            delay(2);
-        }
-    }
+    delay(300);                            // both decelerate together under control
     mbus_pair(REG_CONTROL, CTRL_STOP, CTRL_STOP);  // release once at rest — no residual coast
     cur_left       = 0;
     cur_right      = 0;
@@ -358,7 +286,6 @@ void twist_callback(const void *msgin) {
     float right_ms = lin + (ang * WHEEL_SEPARATION / 2.0f);
     g_left_rpm  = constrain((int)(left_ms  * MS_TO_RPM), -MAX_RPM, MAX_RPM);
     g_right_rpm = constrain((int)(right_ms * MS_TO_RPM), -MAX_RPM, MAX_RPM);
-    g_cmd_count++;
     g_new_cmd   = true;
 }
 
@@ -385,11 +312,6 @@ bool create_entities() {
             ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point32),
             "/encoder_ticks") != RCL_RET_OK) return false;
 
-    if (rclc_publisher_init_default(
-            &publisher_diag, &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point32),
-            "/rover_diag") != RCL_RET_OK) return false;
-
     if (rclc_executor_init(&executor, &support.context, 1, &allocator) != RCL_RET_OK) return false;
     if (rclc_executor_add_subscription(
             &executor, &subscriber_twist, &twist_msg_buf,
@@ -403,7 +325,6 @@ void destroy_entities() {
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_ctx, 0);
     rcl_publisher_fini(&publisher_enc, &node);
     rcl_publisher_fini(&publisher_ticks, &node);
-    rcl_publisher_fini(&publisher_diag, &node);
     rcl_subscription_fini(&subscriber_twist, &node);
     rclc_executor_fini(&executor);
     rcl_node_fini(&node);
@@ -453,10 +374,7 @@ void loop() {
 
     case AGENT_CONNECTED:
         // Spin executor — delivers /cmd_vel messages to twist_callback
-        // 15ms, not 5ms. The serial transport needs real service time; with
-        // blocking Modbus dominating the loop, too small a slice loses pings
-        // and drops the session.
-        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(15));
+        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
 
         // Apply command if one arrived (blocking — 30-60ms max)
         if (g_new_cmd) {
@@ -467,39 +385,35 @@ void loop() {
 
         // Watchdog — stop if no command for 1 second
         if (g_last_cmd_ms > 0 && (millis() - g_last_cmd_ms) > CMD_WATCHDOG_MS) {
-            g_wdog_count++;
             stop_motors();
             g_last_cmd_ms = 0;
         }
 
-        // /wheel_ticks now comes from the REAL encoders (see the poll block
-        // below), not from integrating commanded RPM. The old open-loop version
-        // is kept in main.cpp.bak-openloop.
-        //
-        // Why it was replaced (measured 2026-09-07 with a scripted drive):
-        //   FORWARD  commanded dL=+5900 dR=+5900 | real dL=-1976 dR=+1922
-        //   SPIN     commanded dL=-6898 dR=+6898 | real dL=+2248 dR=+2186
-        // The open-loop values were also 4000/1336 = 2.99x too large, because
-        // ENCODER_CPR was 4000 while the drive's high-precision quadrature
-        // encoder is 334 lines x 4 = 1336 steps/rev (RMCS-2303 manual). The
-        // ratio |real|/|commanded| measured 0.326-0.335 on both wheels in both
-        // directions -- exactly 1336/4000 -- which proves the motors DO reach
-        // commanded RPM. Dead reckoning could never see slip or stall anyway.
+        // Odometry at 20Hz (dead-reckoning from commanded RPM)
+        if (millis() - last_odom_ms >= 50) {
+            float dt = (millis() - last_odom_ms) / 1000.0f;
+            last_odom_ms = millis();
 
-        // Real encoder feedback → /wheel_ticks (odometry) + /encoder_ticks (raw)
+            g_left_ticks  += (cur_left  / 60.0f) * ENCODER_CPR * dt;
+            g_right_ticks += (cur_right / 60.0f) * ENCODER_CPR * dt;
+
+            ticks_msg.x = g_left_ticks;
+            ticks_msg.y = g_right_ticks;
+            ticks_msg.z = 0.0f;
+            rcl_publish(&publisher_ticks, &ticks_msg, NULL);
+        }
+
+        // Real encoder feedback at 2Hz → /encoder_ticks
         // x = left raw 32-bit position, y = right raw position,
         // z = fault flags (0 = both OK, +1 left read failed, +2 right failed;
         //     on failure the last good value is republished).
         // ~80-100ms of bus time per poll; commands still take priority since
         // g_new_cmd is checked first each loop pass.
-        if (millis() - last_enc_ms >= ENC_POLL_MS) {
+        if (millis() - last_enc_ms >= 500) {
             last_enc_ms = millis();
             uint16_t l_lsb = 0, l_msb = 0, r_lsb = 0, r_msb = 0;
             bool okl1, okr1, okl2, okr2;
             mbus_read_pair(REG_POS_LSB, l_lsb, r_lsb, okl1, okr1);
-            // Service micro-ROS between the two blocking reads -- halves the
-            // longest stretch the transport goes unattended during a poll.
-            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
             mbus_read_pair(REG_POS_MSB, l_msb, r_msb, okl2, okr2);
             bool ok_l = okl1 && okl2;
             bool ok_r = okr1 && okr2;
@@ -507,24 +421,6 @@ void loop() {
             if (ok_r) enc_msg.y = (float)(int32_t)(((uint32_t)r_msb << 16) | r_lsb);
             enc_msg.z = (ok_l ? 0.0f : 1.0f) + (ok_r ? 0.0f : 2.0f);
             rcl_publish(&publisher_enc, &enc_msg, NULL);
-
-            // Same counts, converted to the ROBOT convention, for odometry.
-            // LEFT IS NEGATED: the left motor is mirror-mounted (it is the one
-            // driven with dir_cmd(..., inverted=true)), so its encoder counts
-            // down when the wheel rolls the robot forward. Without this flip,
-            // driving straight looks like a pure spin and spinning looks like
-            // pure translation -- which is what wrecked every SLAM map.
-            // On a failed read the last good value is republished, so
-            // rover_odometry sees a zero delta rather than a bogus jump.
-            ticks_msg.x = -enc_msg.x;
-            ticks_msg.y =  enc_msg.y;
-            ticks_msg.z =  enc_msg.z;   // carry the fault flags through
-            rcl_publish(&publisher_ticks, &ticks_msg, NULL);
-
-            diag_msg.x = (float)g_cmd_count;
-            diag_msg.y = (float)g_wdog_count;
-            diag_msg.z = (float)cur_left;
-            rcl_publish(&publisher_diag, &diag_msg, NULL);
         }
 
         // Check agent still alive — every 2s, NOT every loop pass.

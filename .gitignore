@@ -10,5 +10,16 @@ ros2_ws/log/
 __pycache__/
 *.pyc
 
-# Saved maps (regenerable output)
+# Saved maps (regenerable output).
+# EXCEPTION: maps under the package's own maps/ dir that a launch file DEPENDS
+# on are force-added -- master_navigation.launch.py defaults to room_map_v6.yaml,
+# so a fresh clone must have it or the launch fails.
 maps/
+
+# Working backups taken while editing. Git already has the history; these are
+# session scratch and should not accumulate in the repo.
+# EXCEPTION: main.cpp.bak-openloop is force-added -- a comment in main.cpp
+# points at it as the reference for the old dead-reckoning odometry.
+*.bak
+*.bak-*
+*.v1

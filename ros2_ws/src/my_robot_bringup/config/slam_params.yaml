@@ -41,17 +41,28 @@ slam_toolbox:
 
     # Minimum motion before SLAM Toolbox adds a new pose node.
     # Keep low for indoor slow-speed rovers.
-    minimum_travel_distance:    0.20   # metres
-    minimum_travel_heading:     0.174  # radians (~10 degrees)
+    # Denser pose graph. 0.20 m was too coarse for a 10-15 m indoor room and
+    # left few nodes for loop closure to work with.
+    minimum_travel_distance:    0.10   # metres
+    # ~6 deg instead of ~10. Turns are where pose error accumulates fastest,
+    # so they need MORE keyframes, not fewer. With the old value plus a 0.5 s
+    # time gate, a turn at ~26 deg/s advanced ~13 deg between keyframes, which
+    # is what produced doubled/ghosted walls at corners.
+    minimum_travel_heading:     0.105  # radians (~6 degrees)
 
     # -----------------------------------------------------------------------
     # Loop closure — finds when you revisit a location to correct drift
     # -----------------------------------------------------------------------
-    loop_search_maximum_distance:  3.0
+    # How far a candidate node may be and still be considered for loop closure.
+    # Widened so a loop is still found when odometry has drifted a few metres.
+    loop_search_maximum_distance:  5.0
     do_loop_closing:               true
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_covariance: 3.0
-    loop_match_minimum_response_fine:       0.35
+    # Raised to the slam_toolbox default. 0.35 was MORE permissive than stock
+    # and let weak matches through; a false loop closure distorts the map
+    # rather than correcting it.
+    loop_match_minimum_response_fine:       0.45
 
     # -----------------------------------------------------------------------
     # Scan matching fine resolution
@@ -64,13 +75,24 @@ slam_toolbox:
     # Occupancy grid resolution and update rate
     # -----------------------------------------------------------------------
     resolution:   0.05      # metres per cell (5cm — good for indoor)
-    map_update_interval: 5.0  # seconds between map publishes
+    # 1 s gives usable live feedback while driving. At 5 s the Foxglove view
+    # lagged far behind the robot, making it hard to tell a stalled map from a
+    # slow one.
+    map_update_interval: 1.0  # seconds between map publishes
 
     # -----------------------------------------------------------------------
     # Laser/scan parameters — must match RPLIDAR A1M8 specs
     # -----------------------------------------------------------------------
+    # 0.15. Briefly 0.55 to suppress presumed self-hits from the corner
+    # bumpers -- that diagnosis was wrong (a stationary sweep later found no
+    # returns under 0.6 m in any sector), and the cutoff was discarding genuine
+    # close walls while mapping.
+    min_laser_range:         0.15   # metres
     max_laser_range:        12.0   # metres (A1M8 max = 12m)
-    minimum_time_interval:  0.5    # seconds — min time between scans for SLAM
+    # The lidar delivers a scan every ~0.15 s (6.5 Hz). At 0.5 s SLAM discarded
+    # roughly 70% of them. 0.18 s accepts nearly every scan while still
+    # rate-limiting if the driver ever speeds up.
+    minimum_time_interval:  0.18   # seconds
     transform_timeout:      0.2
     tf_buffer_duration:     10.0
 

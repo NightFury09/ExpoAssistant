@@ -29,7 +29,7 @@ def generate_launch_description():
             'serial_port': '/dev/ttyLIDAR', # VERIFY your LiDAR's serial port!
             'frame_id': 'laser_frame',
             'angle_compensate': True,
-            'scan_mode': 'Sensitivity',
+            'scan_mode': 'Express',
             'serial_baudrate': 115200,
         }],
         output='screen'

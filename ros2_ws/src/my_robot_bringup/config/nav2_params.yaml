@@ -7,11 +7,15 @@ map_server:
 amcl:
   ros__parameters:
     use_sim_time: false
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    alpha5: 0.2
+    # Odometry noise model. Lowered from 0.2 on 2026-09-08: /wheel_ticks now
+    # carries REAL encoder counts with a measured cpr/radius/separation, so
+    # odometry deserves more trust than the old open-loop dead reckoning did.
+    # Too high and AMCL sprays particles every update and never settles.
+    alpha1: 0.1
+    alpha2: 0.1
+    alpha3: 0.1
+    alpha4: 0.1
+    alpha5: 0.1
     base_frame_id: "base_link"
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
@@ -21,23 +25,33 @@ amcl:
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
     laser_max_range: 12.0
-    laser_min_range: 0.2
-    max_beams: 60
+    laser_min_range: 0.15
+    # Was 60. Express mode delivers ~476 valid points per scan, so AMCL was
+    # throwing away roughly 87% of the available information -- the main reason
+    # localisation was slow and unreliable. 300 costs little on an Orin.
+    max_beams: 300
     max_particles: 2000
     min_particles: 500
     odom_frame_id: "odom"
     pf_err: 0.05
     pf_z: 0.95
-    recovery_alpha_fast: 0.0
-    recovery_alpha_slow: 0.0
+    # Was 0.0/0.0, which DISABLES recovery: once AMCL lost the robot it could
+    # never re-localise, which is what "it lost its way and stopped responding"
+    # looked like. These enable adaptive particle injection when the estimate
+    # goes bad.
+    recovery_alpha_fast: 0.1
+    recovery_alpha_slow: 0.001
     resample_interval: 1
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
     save_pose_rate: 0.5
     sigma_hit: 0.2
     tf_broadcast: true
     transform_tolerance: 1.0
-    update_min_a: 0.2
-    update_min_d: 0.25
+    # Was 0.2 rad / 0.25 m. At roughly 0.11-0.22 m/s that meant a filter update
+    # only every 1-2 seconds, so convergence crawled. Updating more often is the
+    # single biggest lever on how fast the pose locks on.
+    update_min_a: 0.1
+    update_min_d: 0.1
     z_hit: 0.5
     z_max: 0.05
     z_rand: 0.5
@@ -57,34 +71,96 @@ controller_server:
   ros__parameters:
     use_sim_time: false
     controller_frequency: 20.0
-    min_x_velocity: 0.0
-    min_y_velocity: 0.0
-    min_theta_velocity: 0.0
-    max_x_velocity: 0.26
-    max_y_velocity: 0.0
-    max_theta_velocity: 1.0
-    
-    # --- TUNED PARAMETERS ---
-    acc_lim_x: 1.0          # Reduced from 2.5
-    acc_lim_y: 0.0
-    acc_lim_theta: 1.5      # Reduced from 3.2
-    decel_lim_x: -1.0         # Reduced from -2.5
-    decel_lim_y: 0.0
-    decel_lim_theta: -1.5     # Reduced from -3.2
-    
-    sim_time: 2.5           # Increased from 1.7
 
-    xy_goal_tolerance: 0.25
-    yaw_goal_tolerance: 0.25
+    # Velocities BELOW these are treated as zero (they are thresholds, not
+    # limits). The real limits live under FollowPath, where DWB reads them.
+    min_x_velocity_threshold:     0.001
+    min_y_velocity_threshold:     0.5
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins:   ["goal_checker"]
+    controller_plugins:     ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      # Generous: this rover's top speed is modest, and a tight allowance makes
+      # Nav2 declare failure and start recovery behaviours while it is in fact
+      # still making progress.
+      movement_time_allowance: 15.0
+
+    goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance:  0.25
+      yaw_goal_tolerance: 0.35
+      stateful: True
+
+    # ------------------------------------------------------------------
+    # DWB. Everything here MUST be nested under FollowPath -- that is the
+    # plugin's own parameter namespace.
+    #
+    # Fixed 2026-09-08. These values previously sat one level up, directly
+    # under controller_server, and under names DWB does not read
+    # (max_x_velocity instead of max_vel_x, and so on). The result:
+    #     FollowPath.max_vel_x     = 0.0
+    #     FollowPath.max_vel_theta = 0.0
+    # so every candidate trajectory had zero velocity, the controller could
+    # never make progress, and Nav2 fell back to BackUp + Spin recoveries --
+    # which looked like "the rover spins but never drives to the goal".
+    #
+    # Verify after any edit, do NOT trust the YAML alone:
+    #     ros2 param get /controller_server FollowPath.max_vel_x
+    # ------------------------------------------------------------------
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
-      critics:
-        - "GoalDist"
-        - "PathDist"
-        - "ObstacleFootprint"
-        - "BaseObstacle"
-        - "PathAlign"
-        - "GoalAlign"
+      debug_trajectory_details: True
+
+      min_vel_x:  0.0
+      min_vel_y:  0.0
+      max_vel_x:  0.22
+      max_vel_y:  0.0
+      max_vel_theta: 0.8
+      min_speed_xy:  0.0
+      max_speed_xy:  0.22
+      min_speed_theta: 0.0
+
+      acc_lim_x:  1.0
+      acc_lim_y:  0.0
+      acc_lim_theta:  1.5
+      decel_lim_x: -1.0
+      decel_lim_y:  0.0
+      decel_lim_theta: -1.5
+
+      vx_samples: 20
+      vy_samples: 5
+      vtheta_samples: 20
+      sim_time: 2.0
+      linear_granularity:  0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 0.25
+      trans_stopped_velocity: 0.25
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+
+      # RotateToGoal and Oscillation were missing before. Without RotateToGoal
+      # the robot cannot settle onto the final heading; without Oscillation it
+      # can rock back and forth indefinitely. Critics also need scales -- naming
+      # a critic with no scale leaves it at a default that may not suit.
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign",
+                "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
 
 planner_server:
   ros__parameters:
@@ -94,13 +170,20 @@ planner_server:
       plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
       use_astar: false
-      allow_unknown: true
+      # false, changed 2026-09-08. With `true` the planner routed straight
+      # through the walls and around the OUTSIDE of the building: a 2 m goal
+      # produced a 12.9 m path and 21 recovery behaviours, because everything
+      # beyond the mapped room read as drivable. Only plan through space we
+      # have actually surveyed.
+      allow_unknown: false
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 3.0   # Reduced from 5.0
-      publish_frequency: 1.0  # Reduced from 2.0
+      # The controller runs at 20 Hz; at 3 Hz it was acting on stale obstacle
+      # data, which shows up as hesitation and stop-start motion.
+      update_frequency: 5.0
+      publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_link
       use_sim_time: false
@@ -109,7 +192,7 @@ local_costmap:
       height: 3
       resolution: 0.05
       footprint: "[ [0.23, 0.23], [0.23, -0.23], [-0.23, -0.23], [-0.23, 0.23] ]"
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -123,6 +206,73 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
+          # The rover's own rear corner bumpers return at 0.42-0.45 m. SLAM
+          # already ignores them via min_laser_range in slam_params.yaml, but
+          # that parameter does NOT apply here -- the costmap consumes the raw
+          # /scan. Without this the costmap marks the bumpers as obstacles that
+          # travel with the robot and inflates them over its own footprint,
+          # which measured as cost 81 under the robot and 76% of the area
+          # within 2 m blocked. The controller then crawls and constantly
+          # replans because it believes it is boxed in.
+          # Proper fix: raise the lidar ~5 cm to clear the bumpers, then drop
+          # this back to ~0.20 for genuine close-range detection.
+          # 0.15 = see obstacles right up to the footprint. This was briefly
+          # set to 0.55 to suppress what were believed to be self-hits from the
+          # rover's corner bumpers. That diagnosis was WRONG -- a later stationary
+          # sweep found 0.0% of returns under 0.6 m in every sector, so those
+          # earlier close returns were furniture the rover was parked beside, not
+          # its own structure. At 0.55 the rover drove into a 30 cm box it could
+          # not see, having only 24 cm of margin beyond its 31 cm footprint.
+          # Before ever raising this again, prove the returns move WITH the robot:
+          #   python3 tools/check_lidar.py     (look for sectors under 0.6 m)
+          # and re-check from a second, different parking spot.
+          obstacle_min_range: 0.15
+          raytrace_min_range: 0.0
+      # ---------------------------------------------------------------
+      # D455 depth -> VoxelLayer. LOCAL costmap only.
+      #
+      # Why a VoxelLayer rather than another source on obstacle_layer:
+      # ObstacleLayer raytraces in 2D. The camera sits at 0.82 m, so a ray to a
+      # point 3 m away passes OVER a low box at 1 m, and in 2D projection that
+      # CLEARS the very cell the lidar just marked. A VoxelLayer keeps a 3D grid
+      # and clears in 3D, so rays passing above a low obstacle leave it intact.
+      # Getting this wrong silently deletes near-field obstacles -- the
+      # dangerous direction to fail in.
+      #
+      # Why local only: the camera's contribution is transient and its blind
+      # zones are large (it cannot see the floor within ~1.5 m -- see the
+      # geometry note in realsense.launch.py). The global costmap plans against
+      # the surveyed map; the controller reacts to what the camera sees now.
+      #
+      # Height band, in the global frame (base_link is at floor level):
+      #   0.10  ignore the floor plane and its noise
+      #   1.20  just above the rover's tallest point (~0.9 m mast/screen/camera).
+      #         Nothing higher can collide, and marking ceiling lights or
+      #         hanging signage would only box the robot in.
+      # Range band matches the optics: Min-Z ~0.52 m, and depth beyond ~4 m is
+      # too noisy to trust for marking.
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: False
+        origin_z: 0.0
+        z_resolution: 0.10
+        z_voxels: 16
+        max_obstacle_height: 1.60
+        mark_threshold: 1
+        combination_method: 1
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /camera/camera/depth/color/points
+          data_type: "PointCloud2"
+          marking: True
+          clearing: True
+          min_obstacle_height: 0.10
+          max_obstacle_height: 1.20
+          obstacle_min_range: 0.60
+          obstacle_max_range: 4.0
+          raytrace_min_range: 0.60
+          raytrace_max_range: 4.5
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -136,19 +286,51 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: false
+      # Without this the costmap initialises every cell to FREE, so the 82% of
+      # the grid that is unsurveyed padding around the room looked like open
+      # floor and the planner happily routed through it. Measured before the
+      # fix: 0.0% of the global costmap was 'unknown'.
+      track_unknown_space: true
       footprint: "[ [0.23, 0.23], [0.23, -0.23], [-0.23, -0.23], [-0.23, 0.23] ]"
       resolution: 0.05
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: scan         # <-- ADD THIS SECTION
-        scan:                             # <-- ADD THIS SECTION
-          topic: /scan                    # <-- ADD THIS SECTION
-          max_obstacle_height: 2.0        # <-- ADD THIS SECTION
-          clearing: True                  # <-- ADD THIS SECTION
-          marking: True                   # <-- ADD THIS SECTION
-          data_type: "LaserScan"          # <-- ADD THIS SECTION
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          # The rover's own rear corner bumpers return at 0.42-0.45 m. SLAM
+          # already ignores them via min_laser_range in slam_params.yaml, but
+          # that parameter does NOT apply here -- the costmap consumes the raw
+          # /scan. Without this the costmap marks the bumpers as obstacles that
+          # travel with the robot and inflates them over its own footprint,
+          # which measured as cost 81 under the robot and 76% of the area
+          # within 2 m blocked. The controller then crawls and constantly
+          # replans because it believes it is boxed in.
+          # Proper fix: raise the lidar ~5 cm to clear the bumpers, then drop
+          # this back to ~0.20 for genuine close-range detection.
+          # 0.15 = see obstacles right up to the footprint. This was briefly
+          # set to 0.55 to suppress what were believed to be self-hits from the
+          # rover's corner bumpers. That diagnosis was WRONG -- a later stationary
+          # sweep found 0.0% of returns under 0.6 m in every sector, so those
+          # earlier close returns were furniture the rover was parked beside, not
+          # its own structure. At 0.55 the rover drove into a 30 cm box it could
+          # not see, having only 24 cm of margin beyond its 31 cm footprint.
+          # Before ever raising this again, prove the returns move WITH the robot:
+          #   python3 tools/check_lidar.py     (look for sectors under 0.6 m)
+          # and re-check from a second, different parking spot.
+          obstacle_min_range: 0.15
+          raytrace_min_range: 0.0
+        # The D455 is deliberately NOT a source on the GLOBAL costmap. Its
+        # contribution is transient and noisy, and depth false-positives written
+        # into the global map persist and block planning. Camera obstacles live
+        # in the LOCAL costmap's voxel_layer, where the controller reacts to
+        # them -- the standard, safe arrangement.
       static_layer:
         map_subscribe_transient_local: True
       inflation_layer:
