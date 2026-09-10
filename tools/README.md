@@ -19,6 +19,7 @@ source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
 | `set_initial_pose.py` | Tell AMCL where the robot is |
 | `find_goal.py` | Where can I safely send the robot? |
 | `send_goal.py` | Send it there |
+| `save_waypoint.py` | Record the current pose as a named demo station |
 
 ---
 
@@ -95,6 +96,22 @@ Costmap values (Nav2 publishes `OccupancyGrid` scaled **0–100**, not the inter
 | 90–99 | **inscribed** — robot centre cannot be here |
 | 100 | lethal |
 | −1 | unknown |
+
+**`save_waypoint.py`** — map coordinates are meaningless by eye. The only
+reliable way to define a demo station is to drive the rover there, point it the
+way it should face a visitor, and capture `map → base_footprint`. That records
+the **heading** too, which matters: on arrival the rover should face the person,
+not the wall.
+
+```bash
+python3 save_waypoint.py thermal_camera --label "Thermal Camera" \
+    --say "This is our thermal imaging demo."
+python3 save_waypoint.py --list
+```
+
+Writes to `ros2_ws/src/my_robot_bringup/config/demo_waypoints.yaml`. Poses are in
+the **map frame**, so they belong to the map that was loaded when you captured
+them — re-survey the space and they must be re-captured.
 
 **`send_goal.py`** — publishes to `/goal_pose`, and reminds you of the two
 preconditions that catch people: localisation above ~70%, and **no teleop
