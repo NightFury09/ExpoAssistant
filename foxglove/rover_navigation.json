@@ -1,0 +1,108 @@
+{
+  "configById": {
+    "3D!nav": {
+      "cameraState": {
+        "distance": 14,
+        "perspective": true,
+        "phi": 55,
+        "thetaOffset": 0,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "transforms": {
+          "showLabel": false,
+          "axisScale": 0.5
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/map": {
+          "visible": true,
+          "frameLocked": true
+        },
+        "/scan": {
+          "visible": true,
+          "colorMode": "flat",
+          "flatColor": "#ff3b30ff",
+          "pointSize": 3
+        },
+        "/plan": {
+          "visible": true,
+          "lineWidth": 0.05,
+          "gradient": [
+            "#4d9fffff",
+            "#4d9fffff"
+          ]
+        },
+        "/particle_cloud": {
+          "visible": true
+        },
+        "/local_costmap/costmap": {
+          "visible": false
+        },
+        "/global_costmap/costmap": {
+          "visible": false
+        },
+        "/camera/camera/depth/color/points": {
+          "visible": false,
+          "pointSize": 2
+        },
+        "/slam_toolbox/graph_visualization": {
+          "visible": false
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "pose",
+        "poseTopic": "/goal_pose",
+        "poseEstimateTopic": "/initialpose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      }
+    },
+    "RawMessages!diag": {
+      "topicPath": "/rover_diag"
+    },
+    "RawMessages!amcl": {
+      "topicPath": "/amcl_pose.pose.covariance"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": "3D!nav",
+    "second": {
+      "first": "RawMessages!diag",
+      "second": "RawMessages!amcl",
+      "direction": "column",
+      "splitPercentage": 50
+    },
+    "direction": "row",
+    "splitPercentage": 72
+  }
+}
