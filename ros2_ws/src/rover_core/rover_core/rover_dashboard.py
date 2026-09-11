@@ -20,6 +20,7 @@ micro-ROS transport drops messages if flooded -- that failure looked exactly
 like "Nav2 is broken" for hours. See TROUBLESHOOTING.md.
 """
 import json, math, threading, time, io, os, re, socket, urllib.parse
+import errno, subprocess
 import yaml
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -2289,11 +2290,43 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, 'text/plain', b'not found')
 
 
+def _port_holder(port):
+    """PID currently listening on `port`, if we can work it out."""
+    try:
+        out = subprocess.run(['ss', '-lptnH', f'sport = :{port}'],
+                             capture_output=True, text=True, timeout=3).stdout
+        m = re.search(r'pid=(\d+)', out)
+        return int(m.group(1)) if m else None
+    except Exception:                               # noqa: BLE001
+        return None
+
+
 def main(args=None):
     global NODE
     rclpy.init(args=args)
     NODE = Dash()
-    srv = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
+    try:
+        srv = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        # Starting a second console is the single easiest mistake to make, and
+        # a socket traceback says nothing useful about it. The first one is
+        # still serving; say so, and say how to take the port if that is really
+        # what was wanted.
+        who = _port_holder(PORT)
+        NODE.get_logger().error(
+            f'a rover console is ALREADY running on port {PORT}'
+            + (f' (pid {who})' if who else '') + '.\n'
+            f'    Open http://{local_ip()}:{PORT} -- that one is still serving, '
+            f'and it owns the running stack.\n'
+            '    Only if you really want to replace it:  kill '
+            + (str(who) if who else f'$(fuser -n tcp {PORT} 2>/dev/null)') +
+            '\n    The stack and camera keep running either way; a new console '
+            'adopts them.')
+        NODE.destroy_node()
+        rclpy.shutdown()
+        return 1
     srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     # Every step of teardown is guarded. On Ctrl+C the rclpy context is already
