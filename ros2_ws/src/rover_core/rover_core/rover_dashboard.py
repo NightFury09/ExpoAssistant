@@ -1162,6 +1162,16 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 /* ---------- camera ---------- */
 #camcard{flex:1}
 .vidwrap{flex:1;position:relative;background:#000;overflow:hidden}
+#hud-idle{display:none;flex-direction:column;align-items:center;gap:10px;
+ text-align:center;padding:0 24px;pointer-events:auto}
+#hud-idle.show{display:flex}
+#hud-idle b{font-size:clamp(14px,2.2vh,20px);color:var(--fg)}
+#hud-idle span{font-size:clamp(11px,1.4vh,13px);color:var(--dim);max-width:34em;
+ line-height:1.6}
+#hud-idle button{margin-top:4px;border:1px solid var(--acc);background:var(--acc2);
+ color:#fff;border-radius:8px;padding:10px 18px;cursor:pointer;
+ font:700 clamp(10px,1.2vh,12px)/1 inherit;letter-spacing:.05em}
+#hud-idle button:hover{filter:brightness(1.12)}
 #feed{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .hud{position:absolute;inset:0;pointer-events:none}
 .tl{position:absolute;top:8px;left:10px;display:flex;gap:5px}
@@ -1250,7 +1260,8 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
 <header>
   <div class="brand"><span class="dot" id="live"></span><h1>Rover Control</h1></div>
   <div class="stats">
-    <div class="chip" id="c-mode">mode <b>—</b></div>
+    <div class="chip" id="c-stack">stack <b>—</b></div>
+    <div class="chip" id="c-mode">drive <b>—</b></div>
     <div class="chip" id="c-lat">lat <b>—</b></div>
     <div class="chip" id="c-esp">ESP32 <b>—</b></div>
     <div class="chip" id="c-lidar">lidar <b>—</b></div>
@@ -1380,6 +1391,12 @@ running across a mode change">CAMERA</button>
             <div class="badge" id="hud-d" style="display:none">— m</div>
           </div>
           <div class="ctr" id="hud-msg">waiting for camera…</div>
+          <div class="ctr" id="hud-idle" hidden>
+            <b>Nothing is running</b>
+            <span>The rover's ROS stack has not been started, so the lidar,
+                  ESP32 and camera are all off.</span>
+            <button id="gomap">GO TO THE MAP TAB AND START IT</button>
+          </div>
         </div>
         <div class="alert" id="alert"></div>
       </div>
@@ -1602,8 +1619,22 @@ async function poll(){
   $('#live').className='dot';
   const m=M;
   const md=m.mode||'idle';
+  // The single most important thing on the page: is anything running at all?
+  // Without this, "ESP32 off / lidar off / cam off" looks like broken hardware
+  // when it only means no stack has been started -- and the DRIVE tab gave no
+  // way to tell, because the chip beside it is about who holds the wheel.
+  const ss=(m.stack&&m.stack.state)||'idle';
+  chip('#c-stack',
+       ss==='navigation'||ss==='mapping' ? 'ok'
+       : ss==='starting'||ss==='stopping' ? 'warn'
+       : ss==='external' ? 'warn' : 'bad',
+       ss==='navigation' ? 'NAV' : ss==='mapping' ? 'SLAM'
+       : ss==='idle' ? 'NOT RUNNING' : ss.toUpperCase());
   chip('#c-mode', md==='manual'?'warn':md==='estop'?'bad':'ok',
        md==='manual'?'MANUAL':md==='estop'?'E-STOP':'AUTO');
+  const nothing=(ss==='idle');
+  $('#hud-idle').classList.toggle('show', nothing);
+  $('#hud-msg').style.display = nothing ? 'none' : '';
   chip('#c-lat',lat<150?'ok':lat<400?'warn':'bad',lat+'ms');
   chip('#c-esp',m.diag.ok?'ok':'bad',m.diag.ok?'on':'off');
   chip('#c-lidar',m.lidar.ok?'ok':'bad',m.lidar.ok?f(m.lidar.hz,0)+'Hz':'off');
@@ -2102,6 +2133,7 @@ function setPane(v){
   if(v==='map'&&mapMeta&&!mapFitted)mapFit();
   draw();}
 document.querySelectorAll('#vsw button').forEach(b=>b.onclick=()=>setPane(b.dataset.v));
+$('#gomap').onclick=()=>setPane('map');
 addEventListener('keydown',e=>{
   if(typing(e))return;
   if(e.key==='m'||e.key==='M')setPane($('#view-map').hidden?'map':'drive');});
