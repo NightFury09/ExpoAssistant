@@ -1,0 +1,33 @@
+[Unit]
+Description=Rover console (web UI on :8080, supervises the ROS stacks)
+After=network-online.target
+Wants=network-online.target
+
+# Rate limits belong to the unit, not the service section.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=rptech
+Group=rptech
+WorkingDirectory=/home/rptech
+ExecStart=/home/rptech/AGX_Orin_Backup/rover_project/systemd/rover-console.sh
+Restart=on-failure
+RestartSec=5
+
+# The console must outlive a stack crash, so failures restart it -- but the
+# rate limit above stops a tight loop hammering the serial port on the way past.
+
+# The stacks the console launches live in this cgroup. Stopping the console
+# therefore stops them too, which is what you want: no orphaned node keeping
+# the lidar or the ESP32 serial port open.
+KillMode=control-group
+KillSignal=SIGINT
+TimeoutStopSec=45
+
+# USB: lidar and ESP32.
+SupplementaryGroups=dialout plugdev video
+
+[Install]
+WantedBy=multi-user.target

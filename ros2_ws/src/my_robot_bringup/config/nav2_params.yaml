@@ -35,12 +35,25 @@ amcl:
     odom_frame_id: "odom"
     pf_err: 0.05
     pf_z: 0.95
-    # Was 0.0/0.0, which DISABLES recovery: once AMCL lost the robot it could
-    # never re-localise, which is what "it lost its way and stopped responding"
-    # looked like. These enable adaptive particle injection when the estimate
-    # goes bad.
-    recovery_alpha_fast: 0.1
-    recovery_alpha_slow: 0.001
+    # BOTH 0.0 -- adaptive recovery DISABLED, and deliberately so.
+    #
+    # These were briefly set to 0.1/0.001 to fix "AMCL loses the robot and stops
+    # responding". That diagnosis was wrong: the real cause was the ESP32
+    # dropping /cmd_vel (see TROUBLESHOOTING.md), and localisation was measuring
+    # 91% scan-to-map match throughout -- it was never lost.
+    #
+    # With them enabled, AMCL injects random particles whenever the short-term
+    # sensor likelihood dips below the long-term average. That is exactly how it
+    # escapes a kidnapped-robot situation, and it is also how a perfectly well
+    # localised robot suddenly TELEPORTS across the map mid-goal, which is what
+    # was observed.
+    #
+    # For a booth rover that is placed by hand, given an initial pose, and never
+    # picked up mid-run, the jumping is far worse than the inability to
+    # self-recover. Nav2's own default is 0.0/0.0 for this reason. If the robot
+    # genuinely gets lost, re-send an initial pose.
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
     resample_interval: 1
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
     save_pose_rate: 0.5
@@ -58,6 +71,46 @@ amcl:
     z_short: 0.05
     scan_topic: /scan
 
+behavior_server:
+  ros__parameters:
+    use_sim_time: false
+    # Explicit config rather than nav2 defaults, so the collision checking and
+    # speeds are visible and tunable.
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    # "spin" MUST stay in this list even though booth_recovery.xml never uses
+    # it. bt_navigator loads BOTH the navigate_to_pose tree AND the stock
+    # navigate_through_poses tree, and the stock one calls <Spin>. Dropping the
+    # plugin here made that tree fail to load, which aborted bt_navigator's
+    # ACTIVATION entirely -- every other Nav2 node came up active, /goal_pose
+    # was silently unsubscribed, and goals did nothing with no error anywhere
+    # obvious. The server should offer every standard behaviour; whether a tree
+    # uses one is the tree's business.
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    global_frame: odom
+    robot_base_frame: base_link
+    # 0.3, matching the controller. Odometry is ~4 Hz, so a tighter tolerance
+    # just makes behaviours reject usable transforms.
+    transform_tolerance: 0.3
+    # 2.5 s. At the 0.10 m/s backup speed that projects 0.25 m, which is the
+    # full backup distance, so the entire reverse path is collision-checked
+    # against the local costmap before it commits. The lidar covers 360 deg, so
+    # the rear IS sensed even though the camera faces forward. Raise this if
+    # backup_speed is ever increased, or the check stops covering the move.
+    simulate_ahead_time: 2.5
+    max_rotational_vel: 0.6
+    min_rotational_vel: 0.2
+    rotational_acc_lim: 1.0
+
 bt_navigator:
   ros__parameters:
     use_sim_time: false
@@ -66,6 +119,11 @@ bt_navigator:
     odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
+    # Booth recovery tree: clear costmaps and WAIT, never spin or reverse.
+    # See behavior_trees/booth_recovery.xml for why. The path is rewritten at
+    # launch time by master_navigation.launch.py so it resolves inside the
+    # installed share directory.
+    default_nav_to_pose_bt_xml: "REPLACED_AT_LAUNCH"
 
 controller_server:
   ros__parameters:
@@ -89,9 +147,24 @@ controller_server:
     controller_plugins:     ["FollowPath"]
 
     progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 15.0
+      # PoseProgressChecker, not SimpleProgressChecker.
+      #
+      # SimpleProgressChecker counts ONLY translation. That breaks the final
+      # approach: once the rover is inside the xy tolerance and merely turning
+      # to the goal heading, it translates nothing, so after
+      # movement_time_allowance the checker declares "stuck", fires a recovery,
+      # and the behaviour tree restarts the whole navigate sequence. Observed:
+      # the rover drove 2.2 m to within 0.14 m of a goal (inside the 0.20 m
+      # tolerance) and then looped through 15 recoveries without ever
+      # succeeding.
+      #
+      # PoseProgressChecker accepts ROTATION as progress too, so turning in
+      # place -- during the final heading alignment, and during RotationShim's
+      # turn at the start -- counts as making progress.
+      plugin: "nav2_controller::PoseProgressChecker"
+      required_movement_radius: 0.3
+      required_movement_angle: 0.5      # rad; turning this much counts
+      movement_time_allowance: 25.0
 
     goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
@@ -125,12 +198,19 @@ controller_server:
 
       # --- RegulatedPurePursuit ---
       desired_linear_vel: 0.22
-      # Lookahead is the main smoothness knob: too short and it chases every
-      # wobble (snaking), too long and it cuts corners. 0.6 m against a 0.44 m
-      # chassis is a deliberate bias toward smooth.
-      lookahead_dist: 0.6
-      min_lookahead_dist: 0.35
-      max_lookahead_dist: 0.9
+      # Lookahead is THE smoothness knob for pure pursuit, and the reason is
+      # geometric: steering curvature is computed from the angle to the
+      # lookahead point, so the closer that point is, the more a small pose
+      # error swings the steering command. Odometry here is ~4 Hz and AMCL
+      # nudges the map->odom correction every 0.1 m, so there is always a few
+      # centimetres of pose noise; at 0.6 m that noise was still producing
+      # visible weave on straights.
+      # 0.85 m roughly halves the steering sensitivity to the same noise. The
+      # cost is slightly wider corner cutting, which matters little in a room
+      # this size.
+      lookahead_dist: 0.85
+      min_lookahead_dist: 0.5
+      max_lookahead_dist: 1.2
       lookahead_time: 1.5
       use_velocity_scaled_lookahead_dist: true
 
@@ -148,7 +228,9 @@ controller_server:
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.6
       rotate_to_heading_angular_vel: 0.55
-      max_angular_accel: 1.0
+      # 0.7, down from 1.0. Caps how fast the steering command may change, so a
+      # momentary curvature spike from pose noise cannot become a visible jerk.
+      max_angular_accel: 0.7
 
       allow_reversing: false
       use_collision_detection: true
@@ -164,15 +246,27 @@ planner_server:
     use_sim_time: false
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
-      # false, changed 2026-09-08. With `true` the planner routed straight
-      # through the walls and around the OUTSIDE of the building: a 2 m goal
-      # produced a 12.9 m path and 21 recovery behaviours, because everything
-      # beyond the mapped room read as drivable. Only plan through space we
-      # have actually surveyed.
+      # SmacPlanner2D, not NavFn. NavFn's Dijkstra expansion returns a path that
+      # steps along grid-cell boundaries, so it zigzags -- and the controller
+      # faithfully follows the zigzag, which reads as snaking even when the
+      # controller itself is behaving. Smac2D applies a smoothing pass, so the
+      # path it hands over is already close to drivable.
+      # No stock behaviour tree calls SmoothPath, so using a planner that
+      # smooths internally avoids having to fork the BT.
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.25
+      downsample_costmap: false
       allow_unknown: false
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
 
 local_costmap:
   local_costmap:
@@ -188,7 +282,24 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      footprint: "[ [0.23, 0.23], [0.23, -0.23], [-0.23, -0.23], [-0.23, 0.23] ]"
+      # Circular footprint, radius 0.33 m, set deliberately.
+      #
+      # The rover is physically 44 x 49 cm (deck plus wheels), so a polygon
+      # would let it through 52 cm gaps while driving straight but need 70 cm to
+      # rotate in place. A 0.32 m circle needs 64 cm in EVERY direction: tighter
+      # than the polygon for turning, looser than it for straights.
+      #
+      # The circle is chosen for predictability -- one number, same clearance at
+      # any heading, no orientation-dependent surprises when the rover pivots
+      # beside a booth table. Sized just under the deck's own circumscribed
+      # radius of 0.311 m plus wheels, so it is a true representation of the
+      # space the rover sweeps while turning.
+      #
+      # This does NOT cover the screen overhanging the front. If the screen
+      # reaches further than 0.32 m from the chassis centre, raise this to match
+      # -- it sits at head height and is the part most likely to strike a person
+      # or a booth surface.
+      robot_radius: 0.33
       plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -273,6 +384,14 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
+        # 0.35. NOTE this is measured FROM THE OBSTACLE and INCLUDES the robot
+        # radius -- it is not added on top of it. So the band around a wall is
+        # 0.35 m total, of which 0.33 m is the rover's own body (its centre
+        # cannot be there because it would be inside the wall) and only the last
+        # 2 cm is soft, discouraging cost.
+        # Kept deliberately tight: a large inflation on top of the radius makes
+        # the planner refuse gaps the rover physically clears. The requirement
+        # is that wherever the body fits, the rover goes.
         inflation_radius: 0.35
 
 global_costmap:
@@ -288,7 +407,24 @@ global_costmap:
       # floor and the planner happily routed through it. Measured before the
       # fix: 0.0% of the global costmap was 'unknown'.
       track_unknown_space: true
-      footprint: "[ [0.23, 0.23], [0.23, -0.23], [-0.23, -0.23], [-0.23, 0.23] ]"
+      # Circular footprint, radius 0.33 m, set deliberately.
+      #
+      # The rover is physically 44 x 49 cm (deck plus wheels), so a polygon
+      # would let it through 52 cm gaps while driving straight but need 70 cm to
+      # rotate in place. A 0.32 m circle needs 64 cm in EVERY direction: tighter
+      # than the polygon for turning, looser than it for straights.
+      #
+      # The circle is chosen for predictability -- one number, same clearance at
+      # any heading, no orientation-dependent surprises when the rover pivots
+      # beside a booth table. Sized just under the deck's own circumscribed
+      # radius of 0.311 m plus wheels, so it is a true representation of the
+      # space the rover sweeps while turning.
+      #
+      # This does NOT cover the screen overhanging the front. If the screen
+      # reaches further than 0.32 m from the chassis centre, raise this to match
+      # -- it sits at head height and is the part most likely to strike a person
+      # or a booth surface.
+      robot_radius: 0.33
       resolution: 0.05
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
@@ -333,4 +469,12 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
+        # 0.35. NOTE this is measured FROM THE OBSTACLE and INCLUDES the robot
+        # radius -- it is not added on top of it. So the band around a wall is
+        # 0.35 m total, of which 0.33 m is the rover's own body (its centre
+        # cannot be there because it would be inside the wall) and only the last
+        # 2 cm is soft, discouraging cost.
+        # Kept deliberately tight: a large inflation on top of the radius makes
+        # the planner refuse gaps the rover physically clears. The requirement
+        # is that wherever the body fits, the rover goes.
         inflation_radius: 0.35

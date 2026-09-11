@@ -1,0 +1,83 @@
+<!--
+  Booth recovery tree for the expo rover.
+
+  Recovery order, one action per retry (RoundRobin, 6 retries):
+
+    1. clear costmaps            stale marks from people who already moved
+    2. wait 4s                   let a person step aside
+    3. back up 0.25m             give the planner room if the ROVER is the
+                                 thing that is too close
+    4. spin +45 deg              look left for another way through
+    5. spin -90 deg              look right
+    6. wait 6s                   last chance before aborting
+
+  The order encodes which explanation is most likely, cheapest first. Two
+  situations look identical to the planner and need opposite responses: a
+  PERSON in the path is fixed by waiting, while the ROVER being wedged is fixed
+  only by moving. Waiting is tried first because it is the common case at an
+  expo and costs nothing.
+
+  Why the spins count as "looking for another path": the behaviour tree
+  re-plans after EVERY recovery. Rotating changes what the lidar can see and
+  clears the robot's own orientation constraint, so if a way through exists the
+  next ComputePathToPose finds it and the rover simply carries on. There is no
+  separate "check" step to write.
+
+  +45 then -90 leaves the rover 45 deg right of where it started, which is
+  deliberate: RotationShim will turn it onto whatever path is found, so ending
+  square with the original heading buys nothing.
+
+  Spin was briefly removed on the reasoning that rotating beside a booth table
+  unsettles visitors. That was overreach: it is the only recovery that changes
+  what the sensors can see, and without it a wedged rover has no way to find an
+  alternative route.
+
+  BackUp and Spin are both collision-checked against the local costmap
+  (simulate_ahead_time in behavior_server), and the lidar covers 360 degrees,
+  so the rear is sensed even though the camera faces forward.
+
+  RETURNING TO BASE when nothing works is deliberately NOT here. A behaviour
+  tree recovery cannot know where "base" is, and encoding a fixed pose in this
+  file would break the moment the map changed. When every recovery is exhausted
+  the goal ABORTS, and the layer that sent the goal decides what that means:
+  for the demo navigator, abort means tell the visitor and drive home. See
+  SESSION_STATE.md.
+-->
+
+<!--
+  This Behavior Tree replans the global path periodically at 1 Hz and it also has
+  recovery actions specific to planning / control as well as general system issues.
+  This will be continuous if a kinematically valid planner is selected.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="8" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Wait wait_duration="4"/>
+          <BackUp backup_dist="0.25" backup_speed="0.10"/>
+          <Spin spin_dist="0.79"/>
+          <Spin spin_dist="-1.57"/>
+          <Wait wait_duration="6"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

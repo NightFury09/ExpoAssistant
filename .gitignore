@@ -23,3 +23,8 @@ maps/
 *.bak
 *.bak-*
 *.v1
+
+# Launch logs are runtime noise. demo_waypoints.yaml is NOT ignored: the demo
+# points are the expo deliverable and this repo doubles as the crash backup.
+logs/
+*.pre-console

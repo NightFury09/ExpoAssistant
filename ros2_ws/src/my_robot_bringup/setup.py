@@ -17,6 +17,7 @@ setup(
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.lua'))),
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
         (os.path.join('share', package_name, 'rviz'), glob(os.path.join('rviz', '*.rviz'))),
+        (os.path.join('share', package_name, 'behavior_trees'), glob(os.path.join('behavior_trees', '*.xml'))),
         (os.path.join('share', package_name, 'maps'), glob(os.path.join('maps', '*'))),
     ],
     install_requires=['setuptools'],

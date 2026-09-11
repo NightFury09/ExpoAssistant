@@ -37,6 +37,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition
+from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
@@ -56,6 +57,24 @@ def generate_launch_description():
     #        map:=/home/rptech/AGX_Orin_Backup/rover_project/maps/<name>.yaml
     default_map_path = os.path.join(my_robot_bringup_path, 'maps', 'room_map_v6.yaml')
     nav2_params_path = os.path.join(my_robot_bringup_path, 'config', 'nav2_params.yaml')
+
+    # The behaviour tree path can only reach Nav2 through the params file --
+    # bringup_launch.py accepts params_file and nothing else -- but hardcoding
+    # an absolute install path in a committed YAML is wrong. RewrittenYaml is
+    # nav2's own mechanism for exactly this: substitute at launch time.
+    #
+    # booth_recovery.xml drops Spin and BackUp from the stock recovery tree and
+    # clears/waits instead. At an expo the usual reason planning fails is a
+    # PERSON in the way; spinning beside a booth table alarms visitors and
+    # sweeps the chassis corners through unchecked space, and reversing is worse
+    # because the rover is blind behind at camera height where the crowd is.
+    booth_bt_path = os.path.join(my_robot_bringup_path, 'behavior_trees',
+                                 'booth_recovery.xml')
+    nav2_params_rewritten = RewrittenYaml(
+        source_file=nav2_params_path,
+        root_key='',
+        param_rewrites={'default_nav_to_pose_bt_xml': booth_bt_path},
+        convert_types=True)
     rviz_config_path = os.path.join(my_robot_bringup_path, 'rviz',   'nav2_config.rviz')
     urdf_path        = os.path.join(rover_description_path, 'urdf',   'rover.urdf')
 
@@ -76,6 +95,23 @@ def generate_launch_description():
     declare_use_camera_cmd = DeclareLaunchArgument(
         'use_camera', default_value='false',
         description='Also bring up the RealSense D455 for 3D obstacles')
+
+    # The web dashboard can run ALONGSIDE navigation: it only subscribes to
+    # topics and publishes /cmd_vel while you are actively driving, staying
+    # silent otherwise so Nav2 keeps the wheel. Grab a key and you take over
+    # instantly; release and it hands back. Good for demoing autonomy and
+    # manual control together, with the camera and metrics on screen throughout.
+    # (Do NOT launch teleop_dashboard.launch.py as well -- that starts its own
+    # agent, odometry and lidar, which would collide with these.)
+    # Prefer running `ros2 run rover_core rover_dashboard` OUTSIDE this launch
+    # and leaving it up across restarts: it is the console -- map view, demo
+    # points, goals -- and it binds :8080, so a second copy started here would
+    # fail to bind and the console would silently stop updating. Only set this
+    # true if nothing else is already serving :8080.
+    declare_use_dashboard_cmd = DeclareLaunchArgument(
+        'use_dashboard', default_value='false',
+        description='Also serve the console on :8080 (leave false if it is '
+                    'already running standalone)')
 
     # --- Reset ESP32, then start the micro-ROS agent (produces /wheel_ticks) ---
     esp32_reset_action = ExecuteProcess(
@@ -137,7 +173,7 @@ def generate_launch_description():
         launch_arguments={
             'map':          LaunchConfiguration('map'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
-            'params_file':  nav2_params_path,
+            'params_file':  nav2_params_rewritten,
         }.items())
 
     # Foxglove bridge instead of RViz — this is a headless Jetson (SSH from a
@@ -154,6 +190,11 @@ def generate_launch_description():
                 os.path.join(my_robot_bringup_path, 'launch', 'realsense.launch.py')),
             condition=IfCondition(LaunchConfiguration('use_camera')))])
 
+    dashboard_node = TimerAction(period=12.0, actions=[Node(
+        package='rover_core', executable='rover_dashboard', name='rover_dashboard',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_dashboard')))])
+
     foxglove_bridge_node = Node(
         package='foxglove_bridge', executable='foxglove_bridge', name='foxglove_bridge',
         parameters=[{'port': 8765}], output='screen')
@@ -162,6 +203,7 @@ def generate_launch_description():
         declare_use_sim_time_cmd,
         declare_map_cmd,
         declare_use_camera_cmd,
+        declare_use_dashboard_cmd,
         esp32_reset_action,           # reset ESP32
         delayed_micro_ros,            # agent -> /wheel_ticks
         robot_state_publisher_node,   # URDF TF
@@ -169,5 +211,6 @@ def generate_launch_description():
         delayed_rplidar,              # LiDAR on /dev/ttyLIDAR
         nav2_bringup_launch,          # AMCL + Nav2 stack (costmaps use the pointcloud)
         realsense_launch,             # optional D455 -> local costmap voxel_layer
+        dashboard_node,               # optional web UI on :8080 (manual override)
         foxglove_bridge_node,         # visualization over network (ws://<jetson-ip>:8765)
     ])

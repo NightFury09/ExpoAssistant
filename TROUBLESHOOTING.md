@@ -842,3 +842,53 @@ python3 tools/... trace     # or the scripted drive in the session scratchpad
 A closed square is the sharpest single test -- a straight-line drive can look
 perfect while yaw is broken, and a loop turns any yaw error into visible
 position error.
+
+---
+
+## The saved map said unknown space was free floor
+
+**Symptom:** the planner routes through areas the lidar has never seen —
+outside the building, through a wall gap, across the unsurveyed half of the
+room — even with `track_unknown_space: true` and `allow_unknown: false`.
+
+**Cause:** `map_saver` writes this into the map YAML:
+
+```yaml
+free_thresh: 0.25
+```
+
+The PGM stores unknown as grey **205**. `map_server` converts it with
+`occ = (255 - 205) / 255 = 0.196`, and then classifies:
+
+```
+occ > occupied_thresh -> 100 (wall)
+occ < free_thresh     ->   0 (free)      <-- 0.196 < 0.25, so unknown lands here
+otherwise             ->  -1 (unknown)
+```
+
+So **every never-surveyed cell is published as free floor**. `track_unknown_space`
+has nothing to act on, because by the time the costmap sees the map there is no
+unknown left in it. On `room_map_v6` that was 9204 of 20532 cells — 45% of the
+grid — reported as open floor.
+
+**Fix:** `free_thresh: 0.19`, which puts 0.196 back on the unknown side.
+
+```bash
+grep free_thresh maps/*.yaml        # all of them should read 0.19
+```
+
+Verify from the published topic, not the file:
+
+```bash
+ros2 topic echo /map --once --field data | tr ',' '\n' | sort | uniq -c
+```
+
+Three values are correct: `-1` unknown, `0` free, `100` occupied. If `-1` is
+missing, the threshold is still wrong.
+
+The console fixes this automatically on every map it saves. A map saved any
+other way needs the YAML edited by hand.
+
+**Why it is easy to miss:** the map *looks* right in RViz and Foxglove, because
+they render 0 and -1 differently only by shade. The difference is invisible
+until the planner draws a path through the car park.
