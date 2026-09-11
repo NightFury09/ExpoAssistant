@@ -36,7 +36,7 @@ from geometry_msgs.msg import (Twist, Point32, PoseStamped,
                                PoseWithCovarianceStamped)
 from nav2_msgs.action import NavigateToPose
 from rcl_interfaces.srv import GetParameters
-from slam_toolbox.srv import SaveMap as SlamSaveMap, SerializePoseGraph
+from slam_toolbox.srv import SerializePoseGraph
 from std_msgs.msg import String
 
 from rover_core.stack_supervisor import StackSupervisor, STACKS
@@ -150,6 +150,7 @@ class Dash(Node):
 
         # --- map view state ---
         self.map_png = None         # rendered occupancy grid, PNG bytes
+        self.map_grid = None         # raw occupancy values, for saving
         self.map_meta = None        # resolution / origin / size, for pixel<->metre
         self.map_seq = 0            # bumps on every new map, so the UI can cache
         self.map_name = ''          # which map the waypoints belong to
@@ -201,9 +202,7 @@ class Dash(Node):
         self.sup = StackSupervisor(lambda: list(self.graph_nodes),
                                    self.get_logger())
         self.save_req = None
-        self.save_state = {'busy': False, 'msg': ''}
-        self.slam_save_cli = self.create_client(
-            SlamSaveMap, '/slam_toolbox/save_map')
+        self.save_state = {'busy': False, 'msg': '', 'at': 0.0}
         self.slam_ser_cli = self.create_client(
             SerializePoseGraph, '/slam_toolbox/serialize_map')
         self.create_timer(2.0, self.tick_graph)
@@ -293,8 +292,22 @@ class Dash(Node):
             self.get_logger().warn(f'map list: {e}', throttle_duration_sec=30.0)
             return self._maps
 
-    # ---- saving a map from SLAM --------------------------------------
+    # ---- saving a map ------------------------------------------------
     def tick_save(self):
+        """Write the map ourselves, from the grid we already have.
+
+        This used to call slam_toolbox's /slam_toolbox/save_map and gate on
+        service_is_ready(). That check returned False while slam_toolbox was
+        demonstrably running and mapping, so a perfectly good map could not be
+        saved -- and the same check works fine against map_server, so it is not
+        something worth relying on either way.
+
+        The console is already subscribed to /map and holds the whole grid, so
+        it needs neither the service nor a subprocess: no discovery, no
+        timeout, nothing to be unavailable. The pose graph still comes from
+        slam_toolbox -- only it has that -- but it is requested best-effort and
+        never blocks the save.
+        """
         with self.lock:
             req = self.save_req
             self.save_req = None
@@ -304,59 +317,62 @@ class Dash(Node):
         if not name:
             self._save_msg('name must contain a letter or a number')
             return
-        if not self.slam_save_cli.service_is_ready():
-            self._save_msg('slam_toolbox is not running — start Mapping first')
-            return
-        path = os.path.join(self.map_dir, name)
-        os.makedirs(self.map_dir, exist_ok=True)
         with self.lock:
-            self.save_state = {'busy': True, 'msg': f'saving {name}…'}
-        self._save_path = path
-        fut = self.slam_save_cli.call_async(
-            SlamSaveMap.Request(name=String(data=path)))
-        fut.add_done_callback(self._on_saved)
-        # The pose graph lets a later session CONTINUE this map instead of
-        # starting from scratch; the pgm alone cannot be extended.
-        self.slam_ser_cli.call_async(
-            SerializePoseGraph.Request(filename=path))
-
-    def _on_saved(self, fut):
-        try:
-            res = fut.result().result
-        except Exception as e:                      # noqa: BLE001
-            self._save_msg(f'save failed: {e}'); return
-        if res != 0:
-            self._save_msg('slam_toolbox refused: no map received yet'
-                           if res == 1 else f'slam_toolbox failed (code {res})')
+            grid, meta = self.map_grid, self.map_meta
+        if grid is None or meta is None:
+            self._save_msg('no map received yet — is a stack running?')
             return
-        path = self._save_path
-        fixed = self.fix_map_yaml(path + '.yaml')
-        self._save_msg(f'saved {os.path.basename(path)}' +
-                       (' (free_thresh corrected)' if fixed else ''))
+
+        path = os.path.join(self.map_dir, name)
+        try:
+            os.makedirs(self.map_dir, exist_ok=True)
+            self.write_map(grid, meta, path)
+        except Exception as e:                      # noqa: BLE001
+            self._save_msg(f'could not write {path}.pgm: {e}')
+            return
+
+        cells = grid.size
+        unknown = int((grid < 0).sum())
+        self._save_msg(f'saved {name} · {meta["w"]}x{meta["h"]} · '
+                       f'{100.0 * unknown / cells:.0f}% unsurveyed')
+        self._maps_at = 0.0                         # refresh the picker now
         self.get_logger().info(f'map saved: {path}.yaml')
 
+        # Best effort, and deliberately after the map is already on disk: the
+        # pose graph only matters for CONTINUING this map in a later session.
+        if self.slam_ser_cli.service_is_ready():
+            self.slam_ser_cli.call_async(
+                SerializePoseGraph.Request(filename=path))
+
     @staticmethod
-    def fix_map_yaml(path):
-        """map_saver writes free_thresh: 0.25, which mis-classifies the 205-grey
-        'unknown' pixel as FREE. The planner then treats everything that was
-        never surveyed as open floor and will happily route through it. 0.19
-        puts 205 back on the unknown side of the line."""
-        try:
-            with open(path) as fh:
-                txt = fh.read()
-            m = re.search(r'^free_thresh:\s*([0-9.]+)', txt, re.M)
-            if not m or float(m.group(1)) < 0.196:
-                return False
-            with open(path, 'w') as fh:
-                fh.write(re.sub(r'^free_thresh:.*$', 'free_thresh: 0.19',
-                                txt, flags=re.M))
-            return True
-        except Exception:                           # noqa: BLE001
-            return False
+    def write_map(grid, meta, path):
+        """OccupancyGrid -> the .pgm/.yaml pair map_server loads.
+
+        free_thresh is 0.19, not map_saver's 0.25: the unknown grey 205 works
+        out to 0.196, so at 0.25 every never-surveyed cell is republished as
+        FREE FLOOR and the planner routes straight through it. See
+        TROUBLESHOOTING.md.
+        """
+        img = np.full(grid.shape, 205, np.uint8)    # unknown, and anything
+        img[grid >= 0] = 205                        # ambiguous, stays grey
+        img[(grid >= 0) & (grid <= 25)] = 254       # free
+        img[grid >= 65] = 0                         # occupied
+        # A PGM's first row is the TOP of the image; the grid's first row is
+        # the LOWEST y in the map frame.
+        PImage.fromarray(img[::-1], 'L').save(path + '.pgm')
+        with open(path + '.yaml', 'w') as fh:
+            fh.write(
+                f"image: {os.path.basename(path)}.pgm\n"
+                f"mode: trinary\n"
+                f"resolution: {meta['res']:.6f}\n"
+                f"origin: [{meta['ox']:.6f}, {meta['oy']:.6f}, 0.0]\n"
+                f"negate: 0\n"
+                f"occupied_thresh: 0.65\n"
+                f"free_thresh: 0.19\n")
 
     def _save_msg(self, msg):
         with self.lock:
-            self.save_state = {'busy': False, 'msg': msg}
+            self.save_state = {'busy': False, 'msg': msg, 'at': time.time()}
         self.get_logger().info(f'save map: {msg}')
 
     def tick_map_name(self):
@@ -561,6 +577,7 @@ class Dash(Node):
             buf = io.BytesIO()
             im.save(buf, 'PNG', optimize=True)
             with self.lock:
+                self.map_grid = g
                 self.map_png = buf.getvalue()
                 self.map_meta = {
                     'w': w, 'h': h,
@@ -933,7 +950,7 @@ h1{font-size:clamp(12px,1.5vh,14px);font-weight:650;letter-spacing:-.01em;white-
  text-transform:none;letter-spacing:0}
 .body{flex:1;padding:var(--g);overflow:hidden;display:flex;flex-direction:column}
 .canvbox{flex:1;position:relative;overflow:hidden}
-canvas{position:absolute;inset:0;display:block}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
 /* ---------- view switch (drive / map) ---------- */
 .vsw{flex:none;display:flex;background:var(--panel2);border:1px solid var(--line);
@@ -949,7 +966,7 @@ canvas{position:absolute;inset:0;display:block}
 .mapwrap{flex:1;position:relative;overflow:hidden;background:#0d1116;
  cursor:grab;touch-action:none}
 .mapwrap.drag{cursor:grabbing}
-#mapcv{position:absolute;inset:0;display:block}
+#mapcv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .maptools{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:5px}
 .maptools button{width:30px;height:30px;border-radius:7px;border:1px solid var(--line2);
  background:rgba(10,14,18,.82);color:var(--fg);cursor:pointer;
@@ -1051,6 +1068,7 @@ canvas{position:absolute;inset:0;display:block}
 .wpadd button:disabled{opacity:.45;cursor:not-allowed}
 .wpnote{flex:none;margin-top:5px;font-size:clamp(8.5px,1vh,10.5px);color:var(--faint)}
 .wpnote.bad{color:var(--bad)}
+.wpnote.ok{color:var(--ok)}
 .wpempty{color:var(--faint);font-size:clamp(10px,1.15vh,11.5px);
  text-align:center;padding:14px 8px}
 
@@ -1242,10 +1260,6 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
         </div>
         <div class="wpnote" id="wpnote">Drive to the spot, type a name, press SAVE HERE.</div>
       </div>
-    </div>
-    <div class="card" style="flex:1">
-      <h2>Obstacles <span class="tag" id="radtag2">—</span></h2>
-      <div class="body"><div class="canvbox"><canvas id="radar2"></canvas></div></div>
     </div>
   </div>
 </div>
@@ -1480,7 +1494,7 @@ function draw(){if(!M)return;
   if($('#radar').offsetParent){radar(M.scan,M.lidar.nearest_fwd);
     if($('#spkcard').offsetParent)spark(M.vhist);
     trace(M.path,M.odom);}
-  if($('#radar2').offsetParent)radar(M.scan,M.lidar.nearest_fwd,'#radar2','#radtag2');}
+}
 
 async function poll(){
   const t0=performance.now();
@@ -1555,16 +1569,28 @@ const MAPCV=$('#mapcv'), MAPWRAP=$('#mapwrap');
 let mapImg=null, mapSeq=-1, mapMeta=null, mapScale=28, mapCam={x:0,y:0},
     mapFollow=true, mapFitted=false, mapCur=null, ROBOT_R=0.33;
 
-const sx=x=>(x-mapCam.x)*mapScale+MAPCV.clientWidth/2;
-const sy=y=>MAPCV.clientHeight/2-(y-mapCam.y)*mapScale;
-const wx=p=>(p-MAPCV.clientWidth/2)/mapScale+mapCam.x;
-const wy=p=>mapCam.y-(p-MAPCV.clientHeight/2)/mapScale;
+// Viewport size in CSS pixels, refreshed once per frame and once per pointer
+// event -- never read per point, because getBoundingClientRect forces a layout.
+// It must come from the WRAPPER, which is also what pointer coordinates are
+// measured against. Reading it off the canvas instead was the bug that put
+// every click near the middle of the map: a canvas sized only by inset:0
+// reports its pixel-buffer width, which fit() sets to CSS width x DPR.
+let MW=1, MH=1;
+function msize(){
+  const r=MAPWRAP.getBoundingClientRect();
+  MW=r.width||1; MH=r.height||1; return r;}
+
+const sx=x=>(x-mapCam.x)*mapScale+MW/2;
+const sy=y=>MH/2-(y-mapCam.y)*mapScale;
+const wx=p=>(p-MW/2)/mapScale+mapCam.x;
+const wy=p=>mapCam.y-(p-MH/2)/mapScale;
 
 function mapFit(){
-  // Refuse to fit while the panel is hidden: clientWidth is 0 there and the
+  // Refuse to fit while the panel is hidden: it measures 0 there and the
   // resulting scale would be nonsense that never gets recomputed.
-  if(!mapMeta||!MAPCV.clientWidth||!MAPCV.clientHeight)return;
-  const W=MAPCV.clientWidth, H=MAPCV.clientHeight;
+  msize();
+  if(!mapMeta||MW<2||MH<2)return;
+  const W=MW, H=MH;
   const ew=mapMeta.w*mapMeta.res, eh=mapMeta.h*mapMeta.res;
   mapScale=Math.max(2,Math.min(W/ew,H/eh)*0.94);
   mapCam={x:mapMeta.ox+ew/2, y:mapMeta.oy+eh/2};
@@ -1573,7 +1599,8 @@ function mapFit(){
 function mapZoom(k,px,py){
   // Zoom about a fixed point so the map does not slide out from under the
   // cursor. Without this, zooming in on a doorway loses the doorway.
-  const W=MAPCV.clientWidth, H=MAPCV.clientHeight;
+  msize();
+  const W=MW, H=MH;
   px=(px==null)?W/2:px; py=(py==null)?H/2:py;
   const bx=wx(px), by=wy(py);
   mapScale=Math.max(2,Math.min(600,mapScale*k));
@@ -1582,6 +1609,7 @@ function mapZoom(k,px,py){
 
 function drawMap(){
   const [g,W,H]=fit(MAPCV);
+  MW=W; MH=H;
   if(!mapMeta||!mapImg){return;}
   if(mapFollow&&M&&M.map_pose)mapCam={x:M.map_pose.x,y:M.map_pose.y};
 
@@ -1714,7 +1742,12 @@ function setTool(t){
 $('#t-pan').onclick =()=>setTool('pan');
 $('#t-goal').onclick=()=>setTool(tool==='goal'?'pan':'goal');
 $('#t-pose').onclick=()=>setTool(tool==='pose'?'pan':'pose');
-$('#t-cancel').onclick=()=>fetch('/api/nav_cancel',{method:'POST',body:'{}'});
+$('#t-cancel').onclick=async()=>{
+  // Always say something. A button that silently does nothing when there is no
+  // goal to cancel is indistinguishable from a broken button.
+  const act=M&&M.nav&&['active','sending','cancelling'].includes(M.nav.state);
+  await fetch('/api/nav_cancel',{method:'POST',body:'{}'});
+  $('#nav-de').textContent=act?'cancelling…':'nothing to cancel — no goal is running';};
 
 /* ---- mode / stack control ----
    One stack at a time is enforced on the server; the UI mirrors that by
@@ -1754,7 +1787,8 @@ function stRender(st,maps,save){
     txt='A stack was started outside this console: <b>'+
         esc(st.nodes.slice(0,5).join(', '))+'</b>. Stop it in its own terminal '+
         'before switching modes here.';}
-  else if(save&&save.msg){cls=/fail|refus|not running|must/.test(save.msg)?'bad':'ok';
+  else if(save&&save.msg&&(Date.now()/1000-(save.at||0))<20){
+    cls=/could not|must|no map/.test(save.msg)?'bad':'ok';
     txt=esc(save.msg);}
   else if(s==='mapping')txt='Drive the room with <b>WASD</b> on the Drive tab, '+
     'then name and save the map.';
@@ -1812,6 +1846,7 @@ function wpRender(){
   // Points captured on a different map are in the wrong coordinate frame.
   const wrong = WP.map && WP.current_map && WP.map!==WP.current_map;
   const note=$('#wpnote');
+  if(!wrong && /^(Saved|Type a name)/.test(note.textContent))return;  // keep feedback
   note.className='wpnote'+(wrong?' bad':'');
   note.textContent = wrong
     ? `Saved against "${WP.map}" but "${WP.current_map}" is loaded — these
@@ -1828,14 +1863,20 @@ async function post(url,body){
     return j;
   }catch(e){return {ok:false};}
 }
+function wpNeedName(){
+  $('#wpnote').className='wpnote bad';
+  $('#wpnote').textContent='Type a name for the spot first.';
+  $('#wpname').focus();}
 $('#wphere').onclick=async()=>{
   const n=$('#wpname').value.trim();
-  if(!n){$('#wpname').focus();return;}
+  if(!n)return wpNeedName();
   const j=await post('/api/wp/save',{name:n,here:true});
-  if(j.ok)$('#wpname').value='';};
+  if(j.ok){$('#wpname').value='';
+           $('#wpnote').className='wpnote ok';
+           $('#wpnote').textContent='Saved "'+n+'" at the rover\u2019s position.';}};
 $('#wpplace').onclick=()=>{
   const n=$('#wpname').value.trim();
-  if(!n){$('#wpname').focus();return;}
+  if(!n)return wpNeedName();
   wpPending=n; setPane('map'); setTool('place');};
 $('#wpname').addEventListener('keydown',e=>{
   e.stopPropagation();                       // do not drive the rover while typing
@@ -1867,7 +1908,7 @@ async function fire(t,a){
    the info bar sit on top of the canvas, and offsetX would be measured from
    whichever of those the pointer happened to land on. */
 let mdrag=null;
-const mpos=e=>{const r=MAPWRAP.getBoundingClientRect();
+const mpos=e=>{const r=msize();
   return {x:e.clientX-r.left, y:e.clientY-r.top};};
 const onTool=e=>!!(e.target.closest&&e.target.closest('.maptools'));
 MAPWRAP.addEventListener('pointerdown',e=>{
