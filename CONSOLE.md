@@ -117,13 +117,34 @@ rather than sending the rover to coordinates that mean nothing.
 | light grey | surveyed, drivable |
 | black | wall |
 | mid slate | never seen — the planner will not route through it |
-| red dots | live lidar returns |
+| red dots | live lidar returns, one plane at 24 cm |
+| teal squares | what the **depth camera** sees — the obstacles the lidar misses |
 | blue line | the current Nav2 plan |
 | blue circle | the rover, drawn at its true 0.33 m footprint |
 | purple pin | a demo point |
 | green pin | home / base |
 
-Drag to pan, scroll to zoom, **⤢** fits the map, **◎** keeps the rover centred.
+Drag to pan, scroll to zoom, **⤢** fits the map, **◎** keeps the rover centred,
+**◈** shows or hides the depth obstacles.
+
+### Why the teal squares matter
+
+The lidar scans a single plane at 24 cm. An office chair is a pedestal and five
+thin spokes at floor level with its whole mass above that plane, so the lidar
+sees almost nothing of it and the rover will drive straight into one. The
+camera sits at 82 cm looking slightly down and sees the seat and back.
+
+The teal cells are the same points the local costmap's VoxelLayer marks from —
+filtered to the same 0.10–1.20 m height band — so what you see drawn is what
+Nav2 will actually avoid, not a separate prettier view. The `depth` readout at
+the bottom of the map says how many cells are live, or `no camera` / `stale` /
+`nothing in range` when they are not.
+
+**The camera only looks forward.** Its field of view is about 87°, so obstacles
+*behind* the rover that the lidar cannot see are invisible to both. The local
+costmap does remember a marked cell as the rover turns away — marks persist in
+its 3 m rolling window until something raytraces through them — so the practical
+habit is to let the rover face an area before asking it to reverse into it.
 
 If the rover circle overlaps a wall on screen, it would overlap it in the room.
 That is the check to make before trusting a goal.

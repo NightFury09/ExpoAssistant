@@ -43,11 +43,22 @@ from std_msgs.msg import String
 
 from rover_core.stack_supervisor import StackSupervisor, STACKS
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import Image, LaserScan, PointCloud2
 
 DEFAULT_WP_FILE = os.path.expanduser(
     '~/AGX_Orin_Backup/rover_project/config/demo_waypoints.yaml')
 DEFAULT_MAP_DIR = os.path.expanduser('~/AGX_Orin_Backup/rover_project/maps')
+
+# Depth points are reduced to a 2D set of occupied cells for the map view.
+# The height band matches the local costmap's VoxelLayer exactly, so what the
+# page draws is what Nav2 will actually treat as an obstacle -- 0.10 m to
+# ignore the floor plane, 1.20 m because nothing above the rover's own height
+# can collide with it.
+CLOUD_Z_MIN, CLOUD_Z_MAX = 0.10, 1.20
+CLOUD_RANGE_MIN, CLOUD_RANGE_MAX = 0.6, 4.0   # the D455's usable depth band
+CLOUD_CELL = 0.08          # metres; bin to this before sending
+CLOUD_MAX_PTS = 600        # hard cap on what goes over the wire
+CLOUD_PERIOD = 0.5         # seconds between processed clouds
 
 # Stamp of this file. The page carries the same value and reloads itself when
 # the two differ, so an open tab can never keep running yesterday's JavaScript
@@ -166,6 +177,9 @@ class Dash(Node):
         self.map_name = ''          # which map the waypoints belong to
         self.map_pose = None        # robot in the MAP frame (x, y, yaw deg)
         self.plan = []              # current Nav2 path, decimated
+        self.cloud = []             # depth obstacles, (x, y) in the MAP frame
+        self.cloud_at = 0.0         # when it was last refreshed
+        self._cloud_t = 0.0         # throttle
         self.tf_buf = tf2_ros.Buffer()
         self.tf_lis = tf2_ros.TransformListener(self.tf_buf, self)
 
@@ -243,6 +257,8 @@ class Dash(Node):
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(OccupancyGrid, '/map', self.on_map, LATCHED_QOS)
         self.create_subscription(Path, '/plan', self.on_plan, 10)
+        self.create_subscription(PointCloud2, '/camera/camera/depth/color/points',
+                                 self.on_cloud, SENSOR_QOS)
         self.create_timer(0.2, self.tick_pose)
         self.create_subscription(Point32, '/wheel_ticks',
                                  lambda m: self._set('ticks', (m.x, m.y, m.z)), 10)
@@ -674,6 +690,68 @@ class Dash(Node):
         except Exception as e:
             self.get_logger().warn(f"map render: {e}", throttle_duration_sec=10.0)
 
+    def on_cloud(self, m):
+        """Depth cloud -> the obstacle cells the camera can see, in map frame.
+
+        This is the whole reason the D455 is on the rover. A chair is a
+        pedestal and five thin spokes at floor level with its mass above the
+        lidar's 24 cm plane, so the lidar sees almost nothing of it and the
+        rover will happily drive into one. The camera sees the seat and back.
+
+        Reduced hard before it leaves the node: 31k points several times a
+        second is not something to put through a JSON poll. Subsampled,
+        filtered to the band the VoxelLayer marks from, binned to 8 cm cells
+        and capped. What the page draws is then what Nav2 avoids, not a
+        prettier separate thing.
+        """
+        now = time.time()
+        if now - self._cloud_t < CLOUD_PERIOD:
+            return
+        self._cloud_t = now
+        try:
+            tf = self.tf_buf.lookup_transform(
+                'map', m.header.frame_id, rclpy.time.Time())
+        except Exception:
+            # No map->camera transform: not localised. Draw nothing rather than
+            # draw it in the wrong place.
+            with self.lock:
+                self.cloud = []
+            return
+        try:
+            buf = np.frombuffer(m.data, np.uint8).reshape(-1, m.point_step)
+            step = max(1, buf.shape[0] // 6000)     # work on ~6k points
+            xyz = buf[::step, :12].copy().view(np.float32).reshape(-1, 3)
+            xyz = xyz[np.isfinite(xyz).all(axis=1)]
+            if not len(xyz):
+                return
+            # Range gate in the CAMERA frame, where the optics' limits apply.
+            d = np.linalg.norm(xyz, axis=1)
+            xyz = xyz[(d > CLOUD_RANGE_MIN) & (d < CLOUD_RANGE_MAX)]
+            out = []
+            if len(xyz):
+                t = tf.transform.translation
+                q = tf.transform.rotation
+                x, y, z, w = q.x, q.y, q.z, q.w
+                R = np.array([
+                    [1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
+                    [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+                    [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)]],
+                    dtype=np.float32)
+                pts = xyz @ R.T + np.array([t.x, t.y, t.z], np.float32)
+                pts = pts[(pts[:, 2] > CLOUD_Z_MIN) & (pts[:, 2] < CLOUD_Z_MAX)]
+                if len(pts):
+                    cells = np.unique(
+                        np.round(pts[:, :2] / CLOUD_CELL).astype(np.int32),
+                        axis=0)[:CLOUD_MAX_PTS]
+                    out = [[round(float(c[0]) * CLOUD_CELL, 2),
+                            round(float(c[1]) * CLOUD_CELL, 2)] for c in cells]
+            with self.lock:
+                self.cloud = out
+                self.cloud_at = now
+        except Exception as e:                      # noqa: BLE001
+            self.get_logger().warn(f'depth cloud: {e}',
+                                   throttle_duration_sec=20.0)
+
     def on_plan(self, m):
         pts = [[round(p.pose.position.x, 3), round(p.pose.position.y, 3)]
                for p in m.poses]
@@ -931,6 +1009,9 @@ class Dash(Node):
                               'points': {k: dict(v)
                                          for k, v in self.wp['points'].items()}},
                 'plan': list(self.plan),
+                'cloud': list(self.cloud),
+                'cloud_age': (round(time.time() - self.cloud_at, 1)
+                              if self.cloud_at else None),
                 'path': list(self.path),
                 'vhist': [[round(now - t, 2), round(c, 3), round(v, 3)]
                           for t, c, v in self.v_hist[-120:]],
@@ -1308,6 +1389,7 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
           <span><i style="background:#2c3744"></i>unknown</span>
           <span><i style="background:#f85149"></i>scan</span>
           <span><i style="background:#4d9fff"></i>plan</span>
+          <span><i style="background:#2ec9c9"></i>depth</span>
           <span><i style="background:#a371f7"></i>demo point</span>
           <span><i style="background:#3fb950"></i>base</span>
         </div>
@@ -1316,11 +1398,16 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
           <button id="mzout" title="Zoom out">&minus;</button>
           <button id="mfit"  title="Fit map to window">⤢</button>
           <button id="mlock" title="Keep the rover centred" class="on">◎</button>
+          <button id="mcloud" class="on"
+            title="Show what the depth camera sees. The lidar scans one plane at
+24 cm and misses a chair almost entirely; this is what stops the rover driving
+into one.">◈</button>
         </div>
         <div class="mapinfo">
           <span>pose <b id="mi-pose">—</b></span>
           <span>cursor <b id="mi-cur">—</b></span>
           <span>scale <b id="mi-scl">—</b></span>
+          <span>depth <b id="mi-depth">—</b></span>
         </div>
         <div class="mtools">
           <button id="t-pan" class="arm">PAN</button>
@@ -1746,7 +1833,7 @@ new ResizeObserver(draw).observe(document.body);
    The map frame's +y is UP, the canvas's +y is DOWN, hence the flip in sy().  */
 const MAPCV=$('#mapcv'), MAPWRAP=$('#mapwrap');
 let mapImg=null, mapSeq=-1, mapMeta=null, mapScale=28, mapCam={x:0,y:0},
-    mapFollow=true, mapFitted=false, mapCur=null, ROBOT_R=0.33;
+    mapFollow=true, mapFitted=false, mapCur=null, ROBOT_R=0.33, showCloud=true;
 
 // Viewport size in CSS pixels, refreshed once per frame and once per pointer
 // event -- never read per point, because getBoundingClientRect forces a layout.
@@ -1830,6 +1917,14 @@ function drawMap(){
       g.stroke();
       const e=M.plan[M.plan.length-1];
       g.fillStyle='#4d9fff';g.beginPath();g.arc(sx(e[0]),sy(e[1]),5,0,TAU);g.fill();}
+    if(showCloud&&M.cloud&&M.cloud.length){
+      // Drawn first, so a lidar return is never hidden behind a depth cell.
+      // These are the same cells the local costmap's VoxelLayer marks from --
+      // the chair the lidar cannot see.
+      g.fillStyle='rgba(46,201,201,.72)';
+      const cw=Math.max(2, 0.08*mapScale);
+      for(const p of M.cloud) g.fillRect(sx(p[0])-cw/2, sy(p[1])-cw/2, cw, cw);
+    }
     if(M.scan){                          // live returns, robot frame -> world
       g.fillStyle='#f85149';
       const r=Math.max(1,Math.min(2.6,mapScale/22));
@@ -1858,6 +1953,15 @@ function drawMap(){
   $('#mi-pose').textContent=P?`${f(P.x)}, ${f(P.y)} · ${Math.round(P.yaw)}°`:'not localised';
   $('#mi-cur').textContent=mapCur?`${f(mapCur.x)}, ${f(mapCur.y)}`:'—';
   $('#mi-scl').textContent=`${Math.round(mapScale)} px/m`;
+  const cl=$('#mi-depth');
+  if(cl){
+    const n=(M&&M.cloud)?M.cloud.length:0, age=M&&M.cloud_age;
+    cl.textContent = !showCloud ? 'off'
+      : age==null ? 'no camera'
+      : age>3 ? 'stale'
+      : n ? n+' cells' : 'nothing in range';
+    cl.style.color = (showCloud&&age!=null&&age<=3&&n) ? '#2ec9c9' : 'var(--faint)';
+  }
 }
 
 function mapSync(){                       // called from poll()
@@ -2207,6 +2311,9 @@ $('#mzout').onclick=()=>mapZoom(1/1.3);
 $('#mfit').onclick =()=>mapFit();
 $('#mlock').onclick=()=>{mapFollow=!mapFollow;
   $('#mlock').classList.toggle('on',mapFollow);};
+$('#mcloud').onclick=()=>{showCloud=!showCloud;
+  $('#mcloud').classList.toggle('on',showCloud);
+  toast(showCloud?'depth obstacles shown':'depth obstacles hidden');};
 
 (function mapLoop(){requestAnimationFrame(mapLoop);
   if(MAPCV.offsetParent)drawMap();})();
