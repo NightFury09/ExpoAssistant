@@ -36,6 +36,7 @@ from geometry_msgs.msg import (Twist, Point32, PoseStamped,
                                PoseWithCovarianceStamped)
 from nav2_msgs.action import NavigateToPose
 from rcl_interfaces.srv import GetParameters
+from action_msgs.srv import CancelGoal
 from slam_toolbox.srv import SerializePoseGraph
 from std_msgs.msg import String
 
@@ -178,6 +179,13 @@ class Dash(Node):
                     'result': None, 'since': 0.0}
         self.nav_handle = None
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        # Cancelling through the goal handle only works for goals THIS console
+        # sent. A goal published to /goal_pose, or sent from Foxglove, leaves us
+        # with no handle at all -- and that is exactly when you most want a stop
+        # button that works. The action's own cancel service takes an all-zero
+        # request meaning "cancel every goal", whoever sent it.
+        self.cancel_cli = self.create_client(
+            CancelGoal, '/navigate_to_pose/_action/cancel_goal')
         self.pose_pub = self.create_publisher(
             PoseWithCovarianceStamped, '/initialpose', 10)
         self.create_timer(0.2, self.tick_nav)
@@ -483,9 +491,21 @@ class Dash(Node):
             h = self.nav_handle
             if h is not None:
                 h.cancel_goal_async()
+            sent = False
+            if any(n.lstrip('/') == 'bt_navigator' for n in self.graph_nodes):
+                # All-zero goal_id and stamp: cancel everything.
+                fut = self.cancel_cli.call_async(CancelGoal.Request())
+                fut.add_done_callback(self._nav_cancelled)
+                sent = True
+            if h is not None or sent:
                 self._set_nav('cancelling')
+                # Nav2 stops on its own, but one explicit zero removes any doubt
+                # about a command already in flight to the ESP32.
+                self.pub.publish(Twist())
+                self.get_logger().info('cancel requested')
             else:
-                self._set_nav('idle', goal=None, remaining=None)
+                self._set_nav('idle', goal=None, remaining=None,
+                              result='nothing was running')
 
         if req is None:
             return
@@ -521,6 +541,25 @@ class Dash(Node):
         self.nav_handle = h
         self._set_nav('active')
         h.get_result_async().add_done_callback(self._nav_done)
+
+    def _nav_cancelled(self, fut):
+        """Report what the action server actually cancelled.
+
+        Without this the UI would sit on CANCELLING for ever whenever the
+        button was pressed with no goal running -- which is most of the time
+        someone presses it to check that it works.
+        """
+        try:
+            n = len(fut.result().goals_canceling)
+        except Exception:                           # noqa: BLE001
+            n = 0
+        if n:
+            self._set_nav('idle', goal=None, remaining=None,
+                          result=f'cancelled {n} goal' + ('s' if n > 1 else ''))
+        else:
+            self._set_nav('idle', goal=None, remaining=None,
+                          result='nothing was running')
+        self.get_logger().info(f'cancel: {n} goal(s) cancelling')
 
     def _nav_fb(self, fb):
         with self.lock:
@@ -934,6 +973,12 @@ h1{font-size:clamp(12px,1.5vh,14px);font-weight:650;letter-spacing:-.01em;white-
 .chip.bad{border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08)}
 .chip.bad b{color:var(--bad)}
 @media(max-width:980px){.chip.opt{display:none}}
+#hcancel{flex:none;padding:8px clamp(9px,1.2vw,15px);border-radius:8px;
+ border:1px solid var(--warn);background:rgba(227,179,65,.14);color:var(--warn);
+ font:700 clamp(10px,1.15vh,12px)/1 inherit;letter-spacing:.05em;cursor:pointer;
+ animation:pulse 1.8s infinite}
+#hcancel:hover{background:var(--warn);color:#0b0e12}
+#hcancel[hidden]{display:none}
 #estop{flex:none;padding:8px clamp(10px,1.4vw,18px);border-radius:8px;
  border:1px solid var(--bad);background:var(--bad);color:#fff;
  font:700 clamp(10px,1.15vh,12px)/1 inherit;letter-spacing:.05em;cursor:pointer}
@@ -1185,6 +1230,7 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
     <div class="chip opt" id="c-wdog">wdog <b>—</b></div>
     <div class="chip opt" id="c-up">up <b>—</b></div>
   </div>
+  <button id="hcancel" hidden>CANCEL GOAL</button>
   <div class="vsw" id="vsw">
     <button data-v="drive" class="on">DRIVE</button>
     <button data-v="map">MAP</button>
@@ -1354,6 +1400,7 @@ running across a mode change">CAMERA</button>
       <div class="hint">
         <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive ·
         <kbd>Shift</kbd> boost · <kbd>Space</kbd> e-stop ·
+        <kbd>Esc</kbd> cancel goal · <kbd>M</kbd> map ·
         <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> presets —
         page must keep sending (0.6 s) and the ESP32 halts after 1.5 s of silence.
       </div>
@@ -1719,6 +1766,8 @@ function mapSync(){                       // called from poll()
   if(M.waypoints&&JSON.stringify(M.waypoints)!==JSON.stringify(WP)){
     WP=M.waypoints; wpRender();}
   const nv=M.nav||{state:'idle'};
+  $('#hcancel').hidden=!['active','sending','cancelling'].includes(nv.state);
+  $('#hcancel').textContent=nv.state==='cancelling'?'CANCELLING…':'CANCEL GOAL';
   const cls={active:'var(--acc)',sending:'var(--acc)',arrived:'var(--ok)',
              aborted:'var(--bad)',rejected:'var(--bad)',failed:'var(--bad)',
              'no server':'var(--bad)',cancelling:'var(--warn)'}[nv.state]||'var(--dim)';
@@ -1765,12 +1814,20 @@ function setTool(t){
 $('#t-pan').onclick =()=>setTool('pan');
 $('#t-goal').onclick=()=>setTool(tool==='goal'?'pan':'goal');
 $('#t-pose').onclick=()=>setTool(tool==='pose'?'pan':'pose');
-$('#t-cancel').onclick=async()=>{
+const navLive=()=>!!(M&&M.nav&&['active','sending','cancelling'].includes(M.nav.state));
+async function cancelNav(){
   // Always say something. A button that silently does nothing when there is no
   // goal to cancel is indistinguishable from a broken button.
-  const act=M&&M.nav&&['active','sending','cancelling'].includes(M.nav.state);
+  const act=navLive();
   await fetch('/api/nav_cancel',{method:'POST',body:'{}'});
-  $('#nav-de').textContent=act?'cancelling…':'nothing to cancel — no goal is running';};
+  $('#nav-de').textContent=act?'cancelling…':'nothing to cancel — no goal is running';
+}
+$('#t-cancel').onclick=cancelNav;
+$('#hcancel').onclick=cancelNav;
+// Escape is the reflex when a robot is heading somewhere you did not intend.
+addEventListener('keydown',e=>{
+  if(typing(e))return;
+  if(e.key==='Escape'){e.preventDefault();cancelNav();}});
 
 /* ---- mode / stack control ----
    One stack at a time is enforced on the server; the UI mirrors that by
@@ -2215,6 +2272,10 @@ class Handler(BaseHTTPRequestHandler):
                 NODE.estop = bool(body.get('on', True))
                 if NODE.estop:
                     NODE.cmd = (0.0, 0.0)
+                    # Zeroing /cmd_vel only fights Nav2 -- the goal stays active
+                    # and keeps commanding. An emergency stop has to end the
+                    # goal, not out-shout it.
+                    NODE.nav_cancel_req = True
             self._send(200, 'application/json', b'{"ok":true}')
         else:
             self._send(404, 'text/plain', b'not found')

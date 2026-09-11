@@ -30,7 +30,18 @@ plan, and the saved demo points. Press **M** to flip between tabs.
    in the direction it is actually facing. The scan points should snap onto the
    walls. If they do not, do it again — everything downstream depends on this.
 5. Press **GO** next to a demo point, or arm **SET GOAL** and drag anywhere.
-6. **CANCEL NAV** stops the current goal. **EMERGENCY STOP** kills all motion.
+6. To stop it: **Esc**, the **CANCEL GOAL** button that appears in the header
+   whenever a goal is running, or **CANCEL NAV** on the map toolbar. All three
+   do the same thing and all three work from either tab.
+
+**EMERGENCY STOP** also cancels the goal, not just the motion. Zeroing
+`/cmd_vel` on its own only argues with Nav2 — the goal stays active and keeps
+commanding, so the rover creeps as the two fight.
+
+Cancel works on *any* goal, including one sent from Foxglove or published
+straight to `/goal_pose`. It goes to the action server's own cancel service
+rather than through a goal handle the console only has for its own goals, and
+it reports how many goals it actually stopped.
 
 ## Mapping a new room
 
@@ -181,7 +192,7 @@ the same way. This is the hook for Product_RAG_:
 | method | path | body | does |
 |---|---|---|---|
 | POST | `/api/wp/goto` | `{"name":"robotic_arm"}` | send the rover to a demo point |
-| POST | `/api/nav_cancel` | `{}` | cancel the current goal |
+| POST | `/api/nav_cancel` | `{}` | cancel every running goal, whoever sent it |
 | GET | `/api/metrics` | | everything: `nav.state`, `nav.remaining`, pose, waypoints, mode |
 | POST | `/api/goal` | `{"x":,"y":,"yaw":}` | arbitrary goal, degrees |
 | POST | `/api/wp/save` | `{"name":"x","here":true}` | capture the current pose |
