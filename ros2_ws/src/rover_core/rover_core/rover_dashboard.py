@@ -47,6 +47,14 @@ DEFAULT_WP_FILE = os.path.expanduser(
     '~/AGX_Orin_Backup/rover_project/config/demo_waypoints.yaml')
 DEFAULT_MAP_DIR = os.path.expanduser('~/AGX_Orin_Backup/rover_project/maps')
 
+# Stamp of this file. The page carries the same value and reloads itself when
+# the two differ, so an open tab can never keep running yesterday's JavaScript
+# after a rebuild -- a stale tab is indistinguishable from a broken feature.
+try:
+    BUILD = str(int(os.path.getmtime(os.path.abspath(__file__))))
+except Exception:                                   # noqa: BLE001
+    BUILD = str(int(time.time()))
+
 CMD_HZ     = 10.0
 DEADMAN_S  = 0.6
 STREAM_W   = 640
@@ -202,6 +210,7 @@ class Dash(Node):
         self.sup = StackSupervisor(lambda: list(self.graph_nodes),
                                    self.get_logger())
         self.save_req = None
+        self.saved_map = ''
         self.save_state = {'busy': False, 'msg': '', 'at': 0.0}
         self.slam_ser_cli = self.create_client(
             SerializePoseGraph, '/slam_toolbox/serialize_map')
@@ -336,6 +345,7 @@ class Dash(Node):
         self._save_msg(f'saved {name} · {meta["w"]}x{meta["h"]} · '
                        f'{100.0 * unknown / cells:.0f}% unsurveyed')
         self._maps_at = 0.0                         # refresh the picker now
+        self.saved_map = path + '.yaml'             # so "switch" can use it
         self.get_logger().info(f'map saved: {path}.yaml')
 
         # Best effort, and deliberately after the map is already on disk: the
@@ -831,9 +841,11 @@ class Dash(Node):
                         'ready': self.map_png is not None},
                 'map_pose': self.map_pose,
                 'nav': dict(self.nav),
+                'build': BUILD,
                 'stack': self.sup.status(),
+                'cam_proc': self.sup.camera_status(),
                 'maps': self.list_maps(),
-                'save': dict(self.save_state),
+                'save': dict(self.save_state, path=self.saved_map),
                 'waypoints': {'map': self.wp['map'],
                               'current_map': self.map_name,
                               'points': {k: dict(v)
@@ -1034,6 +1046,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
  font:700 clamp(8.5px,1vh,10.5px)/1 inherit;white-space:nowrap}
 .mrow button:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
 .mrow button:disabled{opacity:.4;cursor:not-allowed}
+.mrow button.on{background:var(--acc2);border-color:var(--acc);color:#fff}
+.mrow button.warn{border-color:var(--warn);color:var(--warn)}
 .stnote{font-size:clamp(8.5px,1vh,10.5px);color:var(--faint);line-height:1.5}
 .stnote b{color:var(--dim);font-family:var(--mono);font-weight:600}
 .stnote.bad{color:var(--bad)}
@@ -1233,12 +1247,17 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
         </div>
         <div class="mrow" id="row-map">
           <select id="mapsel"></select>
-          <label><input type="checkbox" id="usecam"> camera</label>
+          <button id="camtog" title="The camera runs on its own, so it keeps
+running across a mode change">CAMERA</button>
         </div>
         <div class="mrow" id="row-save" hidden>
           <input type="text" id="savename" placeholder="new map name"
                  maxlength="40" autocomplete="off" spellcheck="false">
           <button id="savemap">SAVE MAP</button>
+        </div>
+        <div class="mrow" id="row-use" hidden>
+          <button id="usemap" style="flex:1;border-color:var(--acc);color:var(--acc)">
+            USE THIS MAP &amp; NAVIGATE</button>
         </div>
         <div class="stnote" id="stnote">—</div>
       </div>
@@ -1366,6 +1385,7 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
 
 <script>
 const $=s=>document.querySelector(s), TAU=Math.PI*2;
+const BUILD='__BUILD__';   // substituted when the page is served
 let keys={}, speed=.20, turn=.60, estop=false, boost=false, M=null;
 const f=(x,n=2)=>(x==null||!isFinite(x))?'—':(+x).toFixed(n);
 const row=(k,v,c='')=>`<div class="m"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`;
@@ -1500,6 +1520,9 @@ async function poll(){
   const t0=performance.now();
   try{M=await (await fetch('/api/metrics')).json();}
   catch(e){$('#live').className='dot off';chip('#c-lat','bad','off');return;}
+  // A tab left open across a rebuild would keep running the old JavaScript,
+  // which looks exactly like a feature that does not work. Reload instead.
+  if(M.build&&BUILD!=='__BUILD__'&&M.build!==BUILD){location.reload();return;}
   const lat=Math.round(performance.now()-t0);
   $('#live').className='dot';
   const m=M;
@@ -1692,7 +1715,7 @@ function mapSync(){                       // called from poll()
     $('#maptag').textContent=
       `${(mi.meta.w*mi.meta.res).toFixed(1)} × ${(mi.meta.h*mi.meta.res).toFixed(1)} m `+
       `· ${mi.meta.res.toFixed(2)} m/cell`;}
-  if(M.stack){ST=M.stack; stRender(M.stack,M.maps||[],M.save);}
+  if(M.stack){ST=M.stack; stRender(M.stack,M.maps||[],M.save,M.cam_proc);}
   if(M.waypoints&&JSON.stringify(M.waypoints)!==JSON.stringify(WP)){
     WP=M.waypoints; wpRender();}
   const nv=M.nav||{state:'idle'};
@@ -1755,9 +1778,16 @@ $('#t-cancel').onclick=async()=>{
    operator launched from a terminal. */
 let ST={state:'idle',nodes:[]}, MAPS=[], mapSelTouched=false;
 
-function stRender(st,maps,save){
+function stRender(st,maps,save,cam){
   const s=st.state, busy=(s==='starting'||s==='stopping');
   const idle=(s==='idle');
+  const c=(cam&&cam.state)||'off';
+  const cb=$('#camtog');
+  cb.classList.toggle('on',c==='on');
+  cb.classList.toggle('warn',c==='starting'||c==='external');
+  cb.textContent = c==='on'?'CAMERA ON':c==='starting'?'CAMERA…'
+                 : c==='external'?'CAMERA (EXT)':'CAMERA OFF';
+  cb.disabled=(c==='external');
   $('#sttag').textContent = s.toUpperCase()+(st.ready?' · '+st.ready:'');
   $('#sttag').style.color = {navigation:'var(--acc)',mapping:'#a371f7',
     starting:'var(--warn)',stopping:'var(--warn)',external:'var(--warn)'
@@ -1765,12 +1795,15 @@ function stRender(st,maps,save){
   $('#m-nav').classList.toggle('on',s==='navigation');
   $('#m-map').classList.toggle('on',s==='mapping');
   $('#m-idle').classList.toggle('on',false);
-  $('#m-nav').disabled=!idle||busy;
-  $('#m-map').disabled=!idle||busy;
+  // Switching modes is allowed while a stack is up: it stops the old one and
+  // starts the new one in a single action, so the rover is never left dark.
+  $('#m-nav').disabled=busy||s==='external'||s==='navigation';
+  $('#m-map').disabled=busy||s==='external'||s==='mapping';
+  $('#m-nav').textContent=(s==='mapping')?'SWITCH TO NAVIGATE':'NAVIGATE';
   $('#m-idle').disabled=idle||s==='external'||busy;
-  $('#mapsel').disabled=!idle;
-  $('#usecam').disabled=!idle;
-  $('#row-save').hidden=(s!=='mapping'&&s!=='starting');
+  $('#mapsel').disabled=busy;
+  $('#row-save').hidden=(s!=='mapping');
+  $('#row-use').hidden=!(s==='mapping'&&save&&save.path);
   $('#savemap').disabled=!!(save&&save.busy);
 
   if(JSON.stringify(maps.map(m=>m.name))!==JSON.stringify(MAPS.map(m=>m.name))){
@@ -1800,11 +1833,22 @@ function stRender(st,maps,save){
   n.className='stnote '+cls; n.innerHTML=txt;
 }
 
-async function setMode(mode){
+async function setMode(mode,mapPath){
   const body={mode:mode};
-  if(mode==='navigation'){body.map=$('#mapsel').value;
-                          body.use_camera=$('#usecam').checked;}
-  if(mode==='idle'&&!confirm('Stop the running stack?\nAn unsaved SLAM map is lost.'))return;
+  if(mode==='navigation')body.map=mapPath||$('#mapsel').value;
+  const live=ST.state==='mapping'||ST.state==='navigation';
+  if(mode==='idle'){
+    if(!confirm('Stop everything?\n\nThe lidar and ESP32 go dark. To change '+
+                'mode instead, press the other mode button — that keeps '+
+                'the rover running.'))return;
+  }else if(live){
+    // One action: stop the old stack, start the new one. "Leave mapping"
+    // should never land on a dark rover.
+    body.switch=true;
+    if(ST.state==='mapping'&&!confirm('Leave mapping?\n\nAnything not saved '+
+       'with SAVE MAP is lost. The rover stays powered and comes straight up '+
+       'in navigation.'))return;
+  }
   $('#stnote').className='stnote'; $('#stnote').textContent='working…';
   const r=await fetch('/api/mode',{method:'POST',body:JSON.stringify(body)});
   const j=await r.json();
@@ -1813,6 +1857,13 @@ async function setMode(mode){
 $('#m-nav').onclick =()=>setMode('navigation');
 $('#m-map').onclick =()=>setMode('mapping');
 $('#m-idle').onclick=()=>setMode('idle');
+$('#usemap').onclick=()=>{
+  const p=M&&M.save&&M.save.path;
+  if(p)setMode('navigation',p);};
+$('#camtog').onclick=async()=>{
+  const on=!(M&&M.cam_proc&&M.cam_proc.state==='on');
+  $('#camtog').disabled=true;
+  await fetch('/api/camera',{method:'POST',body:JSON.stringify({on:on})});};
 $('#savemap').onclick=()=>{
   const n=$('#savename').value.trim();
   if(!n){$('#savename').focus();return;}
@@ -2003,7 +2054,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ('/', '/index.html'):
-            self._send(200, 'text/html; charset=utf-8', PAGE.encode())
+            self._send(200, 'text/html; charset=utf-8',
+                       PAGE.replace('__BUILD__', BUILD).encode())
         elif self.path == '/api/metrics':
             self._send(200, 'application/json',
                        json.dumps(NODE.metrics()).encode())
@@ -2130,14 +2182,17 @@ class Handler(BaseHTTPRequestHandler):
             if want == 'idle':
                 ok, msg = NODE.sup.stop()
             else:
-                # Stopping first would silently discard an unsaved SLAM map.
-                # Refuse instead and make the operator stop explicitly.
                 opts = {}
                 if body.get('map'):
                     opts['map'] = str(body['map'])
-                if body.get('use_camera'):
-                    opts['use_camera'] = 'true'
-                ok, msg = NODE.sup.start(want, opts)
+                # A switch stops the old stack and starts the new one as ONE
+                # action, so "leave mapping" never lands on a dead rover.
+                ok, msg = (NODE.sup.switch(want, opts) if body.get('switch')
+                           else NODE.sup.start(want, opts))
+            self._send(200 if ok else 409, 'application/json',
+                       json.dumps({'ok': ok, 'err': None if ok else msg}).encode())
+        elif self.path == '/api/camera':
+            ok, msg = NODE.sup.camera(bool(body.get('on')))
             self._send(200 if ok else 409, 'application/json',
                        json.dumps({'ok': ok, 'err': None if ok else msg}).encode())
         elif self.path == '/api/save_map':
