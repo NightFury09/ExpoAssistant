@@ -1,0 +1,36 @@
+[Unit]
+Description=Rover console (web UI on :8080, supervises the ROS stacks)
+After=network-online.target
+Wants=network-online.target
+
+# Restart on failure, but not in a tight loop -- a genuinely broken build
+# should fail visibly rather than hammer the ESP32 serial port on the way past.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/rptech
+ExecStart=/home/rptech/AGX_Orin_Backup/rover_project/systemd/rover-console.sh
+Restart=on-failure
+RestartSec=5
+
+# Log to a file, not the journal. journald here has no /var/log/journal, so it
+# is volatile -- every reboot loses it, and this machine gets power-cycled at
+# an expo, which is exactly when you want to know what happened before it went
+# down. systemd still records start/stop/failed in the journal, so
+# `systemctl --user status` remains useful; this is the console's own output,
+# and it sits next to the per-launch stack logs the console already writes.
+StandardOutput=append:/home/rptech/AGX_Orin_Backup/rover_project/logs/console.log
+StandardError=append:/home/rptech/AGX_Orin_Backup/rover_project/logs/console.log
+
+# The stacks the console launches live in this unit's cgroup, so stopping the
+# console stops them too: no orphaned node left holding the lidar or the ESP32
+# serial port. SIGINT because that is what ros2 launch shuts down cleanly on,
+# and 45 s because a Nav2 lifecycle teardown genuinely takes that long.
+KillMode=control-group
+KillSignal=SIGINT
+TimeoutStopSec=45
+
+[Install]
+WantedBy=default.target

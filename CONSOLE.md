@@ -159,24 +159,57 @@ up, that file has the reason.
 
 ## Autostart
 
-```bash
-~/AGX_Orin_Backup/rover_project/systemd/install.sh
-```
-
-Then:
+**Installed and running.** The console comes up on boot with nobody logged in,
+and no terminal is involved.
 
 ```bash
-sudo systemctl status rover-console
-journalctl -u rover-console -f
+~/AGX_Orin_Backup/rover_project/systemd/install.sh      # re-run to upgrade it
 ```
 
-Stop the hand-started console before installing — it owns :8080 and the
-service cannot bind on top of it. The installer checks and tells you.
+It is a **user** service, so none of these need `sudo`:
+
+```bash
+systemctl --user status rover-console
+systemctl --user restart rover-console     # after a code change
+systemctl --user stop rover-console        # console AND the stacks it launched
+systemctl --user start rover-console
+systemctl --user disable rover-console     # stop it starting at boot
+```
+
+Note the `--user`. Without it systemctl looks for a system-wide unit that does
+not exist, and says `Unit rover-console.service could not be found`.
+
+A user service works here because `rptech` is already in `dialout`, `video` and
+`plugdev`, so the lidar, ESP32 and camera need no privilege — and
+`loginctl enable-linger` (which the installer does) is what makes it start at
+boot with nobody logged in. `./install.sh --system` installs it system-wide
+instead, and that one does need sudo.
+
+### Logs
+
+```bash
+tail -f ~/AGX_Orin_Backup/rover_project/logs/console.log
+```
+
+**Not** `journalctl`. This machine has no `/var/log/journal`, so its journal is
+volatile and every reboot wipes it — which is exactly when you want to know
+what happened. The console's own output goes to that file instead, next to the
+per-launch stack logs. systemd still records start/stop/failed in the journal,
+so `systemctl --user status` remains useful.
+
+### Behaviour
+
+It restarts itself 5 s after a crash, at most 5 times in 120 s — so a genuinely
+broken build fails visibly instead of hammering the ESP32 serial port. Verified
+with `kill -9`: back and serving.
+
+`systemctl --user stop` is therefore the only way to make it stay down. Killing
+the process just brings it back.
 
 Stopping the service also stops any stack **it** launched: those live in its
-cgroup. A stack it merely adopted — started by an earlier console, before the
-service existed — is not in that cgroup and keeps running; the service picks it
-up again next time it starts.
+cgroup. A stack it merely adopted — started by an earlier console — is not in
+that cgroup and keeps running; the service picks it up again next time it
+starts.
 
 Restarting the console on its own leaves the stack and camera running and
 re-adopts them, so a console restart is not a rover restart.
