@@ -162,8 +162,24 @@ def generate_launch_description():
             'angle_compensate': True,
             'scan_mode':        'Express',
         }],
-        respawn=True, respawn_delay=3.0, output='screen')
+        respawn=True, respawn_delay=3.0, output='screen',
+        remappings=[('scan', 'scan_raw')])
     delayed_rplidar = TimerAction(period=5.0, actions=[rplidar_node])
+    # The mast that holds the screen stands in the lidar plane and returns a hit
+    # on every sweep. Left in, the costmap marks it, and because it moves with
+    # the robot the mark moves too -- inflated over the footprint it made 70% of
+    # the local costmap read as blocked and throttled the controller to its
+    # minimum speed. rplidar therefore publishes /scan_raw and this republishes
+    # /scan with that one narrow wedge removed. Everything downstream is
+    # unchanged. See rover_core/scan_filter.py for the measurement.
+    scan_filter_node = Node(
+        package='rover_core', executable='scan_filter', name='scan_filter',
+        parameters=[{
+            'input_topic':  '/scan_raw',
+            'output_topic': '/scan',
+        }],
+        respawn=True, respawn_delay=2.0, output='screen')
+
 
 
     # --- Full Nav2 stack (map_server + AMCL + planner + controller + costmaps) ---
@@ -209,6 +225,7 @@ def generate_launch_description():
         robot_state_publisher_node,   # URDF TF
         rover_odometry_node,          # /odom topic + odom->base_footprint TF
         delayed_rplidar,              # LiDAR on /dev/ttyLIDAR
+        scan_filter_node,             # /scan_raw -> /scan, mast removed
         nav2_bringup_launch,          # AMCL + Nav2 stack (costmaps use the pointcloud)
         realsense_launch,             # optional D455 -> local costmap voxel_layer
         dashboard_node,               # optional web UI on :8080 (manual override)

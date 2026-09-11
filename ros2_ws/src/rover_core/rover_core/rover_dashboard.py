@@ -662,6 +662,14 @@ class Dash(Node):
             t = self.tf_buf.lookup_transform('map', 'base_footprint',
                                              rclpy.time.Time())
         except Exception:
+            # Clear it. Returning early kept the LAST known pose on screen for
+            # ever, so a rover that had lost localisation -- or never had it,
+            # because AMCL was still waiting for an initial pose -- went on
+            # being drawn sitting confidently on the map. A stale pose is worse
+            # than no pose: it is the one number everything else is judged
+            # against.
+            with self.lock:
+                self.map_pose = None
             return
         q = t.transform.rotation
         yaw = math.degrees(math.atan2(2 * (q.w * q.z + q.x * q.y),

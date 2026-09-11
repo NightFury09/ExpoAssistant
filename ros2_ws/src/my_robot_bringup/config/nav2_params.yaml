@@ -192,8 +192,9 @@ controller_server:
       primary_controller: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       angular_dist_threshold: 0.55        # rad (~32 deg) before rotating in place
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 0.55
-      max_angular_accel: 1.0
+      # (rotate_to_heading_angular_vel and max_angular_accel were also set
+      # here; both are set again further down in this same block, and YAML
+      # keeps the last. They were dead text that read like live tuning.)
       simulate_ahead_time: 1.0
 
       # --- RegulatedPurePursuit ---
@@ -271,10 +272,17 @@ planner_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      # The controller runs at 20 Hz; at 3 Hz it was acting on stale obstacle
-      # data, which shows up as hesitation and stop-start motion.
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      # The controller runs at 10 Hz. At 5 Hz this handed it obstacle data up
+      # to 200 ms old, so the rover reacted a fifth of a second late to anything
+      # that appeared -- hesitation and stop-start motion. 10 Hz means the
+      # costmap is never staler than one controller tick.
+      #
+      # This does NOT touch controller_frequency, which stays at 10: that sets
+      # the /cmd_vel rate, and flooding the ESP32 starves its micro-ROS
+      # transport. That failure looked exactly like "Nav2 is broken" for hours.
+      # A 60x60 cell rolling window costs nothing to update faster.
+      update_frequency: 10.0
+      publish_frequency: 5.0
       global_frame: odom
       robot_base_frame: base_link
       use_sim_time: false
@@ -300,10 +308,26 @@ local_costmap:
       # -- it sits at head height and is the part most likely to strike a person
       # or a booth surface.
       robot_radius: 0.33
-      plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
+      # No static_layer here, matching nav2's own default for a rolling local
+      # costmap. Having it caused two distinct failures:
+      #
+      # 1. It needs map->odom every update cycle. Before the initial pose is
+      #    set AMCL publishes no such transform, StaticLayer throws
+      #    'map passed to lookupTransform does not exist', and the WHOLE
+      #    costmap update aborts -- so the obstacle and voxel layers never run
+      #    and the costmap publishes nothing at all. Measured: one message in
+      #    15 seconds, entirely zero, while the lidar was returning obstacles
+      #    at 0.41 m. The controller was working from an empty world.
+      #
+      # 2. Once localised it copies the surveyed map into the local window, so
+      #    the controller refuses space the map calls occupied even when the
+      #    lidar can see it is clear right now. On a map that is 85% unsurveyed
+      #    with imperfect walls that reads as "there is obviously room and it
+      #    will not go".
+      #
+      # The global costmap keeps its static_layer: planning is what the map is
+      # for. The controller reacts to what the sensors see NOW.
+      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True

@@ -101,12 +101,28 @@ def generate_launch_description():
         }],
         respawn=True,
         respawn_delay=3.0,
-        output='screen'
+        output='screen',
+        remappings=[('scan', 'scan_raw')]
     )
     delayed_rplidar = TimerAction(
         period=5.0,
         actions=[rplidar_node]
     )
+    # The mast that holds the screen stands in the lidar plane and returns a hit
+    # on every sweep. Left in, the costmap marks it, and because it moves with
+    # the robot the mark moves too -- inflated over the footprint it made 70% of
+    # the local costmap read as blocked and throttled the controller to its
+    # minimum speed. rplidar therefore publishes /scan_raw and this republishes
+    # /scan with that one narrow wedge removed. Everything downstream is
+    # unchanged. See rover_core/scan_filter.py for the measurement.
+    scan_filter_node = Node(
+        package='rover_core', executable='scan_filter', name='scan_filter',
+        parameters=[{
+            'input_topic':  '/scan_raw',
+            'output_topic': '/scan',
+        }],
+        respawn=True, respawn_delay=2.0, output='screen')
+
 
     # -------------------------------------------------------------------------
     # Node 5: SLAM Toolbox — builds /map from /scan
@@ -164,6 +180,7 @@ def generate_launch_description():
         robot_state_publisher_node,
         rover_odometry_node,
         delayed_rplidar,
+        scan_filter_node,        # /scan_raw -> /scan, mast removed
         delayed_slam,
         foxglove_bridge_node,
         print_url_action,
