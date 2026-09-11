@@ -975,6 +975,11 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
  --fs:clamp(11px,1.15vh,13px);       /* body metric size */
 }
 *{box-sizing:border-box;margin:0;padding:0;min-width:0;min-height:0}
+/* The browser's own [hidden]{display:none} is a bare-element rule, so ANY
+   class rule here that sets display quietly beats it and el.hidden stops
+   working -- silently, and only for that element. That shipped a button which
+   was always visible and did nothing when pressed. One rule, once. */
+[hidden]{display:none!important}
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column;
  font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
@@ -1004,7 +1009,6 @@ h1{font-size:clamp(12px,1.5vh,14px);font-weight:650;letter-spacing:-.01em;white-
  font:700 clamp(10px,1.15vh,12px)/1 inherit;letter-spacing:.05em;cursor:pointer;
  animation:pulse 1.8s infinite}
 #hcancel:hover{background:var(--warn);color:#0b0e12}
-#hcancel[hidden]{display:none}
 #estop{flex:none;padding:8px clamp(10px,1.4vw,18px);border-radius:8px;
  border:1px solid var(--bad);background:var(--bad);color:#fff;
  font:700 clamp(10px,1.15vh,12px)/1 inherit;letter-spacing:.05em;cursor:pointer}
@@ -1042,7 +1046,6 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
  padding:5px clamp(9px,1.2vw,15px);border-radius:6px;
  font:700 clamp(9px,1.05vh,11px)/1 inherit;letter-spacing:.07em}
 .vsw button.on{background:var(--acc2);color:#fff}
-.grid[hidden]{display:none}
 
 /* ---------- map ---------- */
 #mapcard{flex:1}
@@ -1892,7 +1895,7 @@ addEventListener('keydown',e=>{
    One stack at a time is enforced on the server; the UI mirrors that by
    disabling both start buttons whenever anything is up, including a stack the
    operator launched from a terminal. */
-let ST={state:'idle',nodes:[]}, MAPS=[], mapSelTouched=false;
+let ST={state:'idle',nodes:[]}, MAPS=[], lastSaved='';
 
 function stRender(st,maps,save,cam){
   const s=st.state, busy=(s==='starting'||s==='stopping');
@@ -1939,6 +1942,12 @@ function stRender(st,maps,save,cam){
       ? maps.map(m=>`<option value="${esc(m.path)}">${esc(m.name)}</option>`).join('')
       : '<option value="">no maps found</option>';
     if(cur&&maps.some(m=>m.path===cur))$('#mapsel').value=cur;
+  }
+  // Point the picker at a map that was just saved, so NAVIGATE means the map
+  // you have this second rather than whatever was selected beforehand.
+  if(save&&save.path&&save.path!==lastSaved){
+    lastSaved=save.path;
+    if(maps.some(m=>m.path===save.path))$('#mapsel').value=save.path;
   }
   const n=$('#stnote');
   let cls='',txt;
@@ -1991,8 +2000,12 @@ $('#m-nav').onclick =()=>setMode('navigation');
 $('#m-map').onclick =()=>setMode('mapping');
 $('#m-idle').onclick=()=>setMode('idle');
 $('#usemap').onclick=()=>{
-  const p=M&&M.save&&M.save.path;
-  if(p)setMode('navigation',p);};
+  // save.path is in-memory, so a console restart between SAVE MAP and this
+  // press would empty it. The dropdown still knows which map is selected.
+  const p=(M&&M.save&&M.save.path)||$('#mapsel').value;
+  if(p)setMode('navigation',p);
+  else{$('#stnote').className='stnote bad';
+       $('#stnote').textContent='Save the map first, or pick one from the list.';}};
 $('#camtog').onclick=async()=>{
   const on=!(M&&M.cam_proc&&M.cam_proc.state==='on');
   $('#camtog').disabled=true;
