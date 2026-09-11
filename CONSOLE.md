@@ -155,11 +155,16 @@ sudo systemctl status rover-console
 journalctl -u rover-console -f
 ```
 
-Stopping the service also stops any stack it launched — they live in its
-cgroup, so nothing is left holding the lidar or the ESP32 serial port.
+Stop the hand-started console before installing — it owns :8080 and the
+service cannot bind on top of it. The installer checks and tells you.
 
-Restarting the console on its own (not via systemd) leaves the stack and camera
-running and re-adopts them, so a console restart is not a rover restart.
+Stopping the service also stops any stack **it** launched: those live in its
+cgroup. A stack it merely adopted — started by an earlier console, before the
+service existed — is not in that cgroup and keeps running; the service picks it
+up again next time it starts.
+
+Restarting the console on its own leaves the stack and camera running and
+re-adopts them, so a console restart is not a rover restart.
 
 ---
 
