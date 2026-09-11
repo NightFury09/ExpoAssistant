@@ -95,6 +95,41 @@ class Adopted:
         return None
 
 
+D455_IDS = ('8086', '0b5c')
+
+
+def d455_link_speed():
+    """Negotiated USB link speed of the D455 in Mbit/s, or None if absent.
+
+    A D455 on a USB 2 link still enumerates, still streams, and still looks
+    healthy -- at about a quarter of the frame rate. Measured here: colour 5.2
+    Hz instead of 30, pointcloud 7.0 instead of 22.7. That is a silent
+    degradation of exactly the data the obstacle layer runs on, and the only
+    warning is one line buried in the camera launch log. Worth a glance at
+    sysfs so the page can say it out loud.
+
+    A half-seated USB-A plug, or a charge-only cable, gives precisely this:
+    the SuperSpeed pins sit at the back of the connector, so a loose plug
+    negotiates USB 2 rather than failing outright.
+    """
+    try:
+        for d in os.listdir('/sys/bus/usb/devices'):
+            base = f'/sys/bus/usb/devices/{d}'
+            try:
+                with open(f'{base}/idVendor') as fh:
+                    vid = fh.read().strip()
+                with open(f'{base}/idProduct') as fh:
+                    pid = fh.read().strip()
+            except OSError:
+                continue
+            if (vid, pid) == D455_IDS:
+                with open(f'{base}/speed') as fh:
+                    return int(float(fh.read().strip()))
+    except Exception:                               # noqa: BLE001
+        pass
+    return None
+
+
 def _find_launch(launch_file):
     """PIDs of `ros2 launch my_robot_bringup <launch_file>` we can signal.
 
@@ -290,7 +325,11 @@ class StackSupervisor:
             st = 'external'
         else:
             st = 'off'
+        mbps = d455_link_speed()
         return {'state': st,
+                'usb_mbps': mbps,
+                # 5000 = USB 3 SuperSpeed. 480 means it will run, badly.
+                'usb_ok': (mbps is None or mbps >= 5000),
                 'log': os.path.basename(self.cam_log) if self.cam_log else ''}
 
     # ---- control -----------------------------------------------------

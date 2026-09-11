@@ -1900,10 +1900,17 @@ function stRender(st,maps,save,cam){
   const c=(cam&&cam.state)||'off';
   const cb=$('#camtog');
   cb.classList.toggle('on',c==='on');
-  cb.classList.toggle('warn',c==='starting'||c==='external');
-  cb.textContent = c==='on'?'CAMERA ON':c==='starting'?'CAMERA…'
+  const usbBad = cam && cam.usb_mbps && !cam.usb_ok;
+  cb.classList.toggle('warn', c==='starting'||c==='external'||!!usbBad);
+  cb.textContent = c==='on'?(usbBad?'CAMERA · USB2':'CAMERA ON')
+                 : c==='starting'?'CAMERA…'
                  : c==='external'?'CAMERA (EXT)':'CAMERA OFF';
   cb.disabled=(c==='external');
+  cb.title = usbBad
+    ? `The camera negotiated a USB 2 link (${cam.usb_mbps} Mbit/s) instead of `+
+      `USB 3. It runs at about a quarter rate. Reseat the plug firmly or use a `+
+      `USB 3 cable.`
+    : 'The camera runs on its own, so it keeps running across a mode change';
   $('#sttag').textContent = s.toUpperCase()+(st.ready?' · '+st.ready:'');
   $('#sttag').style.color = {navigation:'var(--acc)',mapping:'#a371f7',
     starting:'var(--warn)',stopping:'var(--warn)',external:'var(--warn)'
@@ -1942,6 +1949,10 @@ function stRender(st,maps,save,cam){
   else if(save&&save.msg&&(Date.now()/1000-(save.at||0))<20){
     cls=/could not|must|no map/.test(save.msg)?'bad':'ok';
     txt=esc(save.msg);}
+  else if(usbBad)
+    txt='Camera is on a <b>USB 2</b> link ('+cam.usb_mbps+' Mbit/s), so it runs '+
+        'at about a quarter rate and the depth obstacle layer with it. Reseat '+
+        'the plug firmly, or use a USB 3 cable.';
   else if(s==='mapping')txt='Drive the room with <b>WASD</b> on the Drive tab, '+
     'then name and save the map.';
   else if(s==='navigation')txt='Map <b>'+esc((st.opts&&st.opts.map||'').split("/").pop()
