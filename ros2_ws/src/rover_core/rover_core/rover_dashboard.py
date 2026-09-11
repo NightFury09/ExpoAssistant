@@ -288,7 +288,20 @@ class Dash(Node):
         try:
             self.graph_nodes = [n for n, _ in self.get_node_names_and_namespaces()]
         except Exception:                           # noqa: BLE001
-            pass
+            return
+        # Two nodes with the same name is legal in ROS 2 and quietly poisonous:
+        # service calls and parameter sets go to whichever answers first. A
+        # second console is a fine thing to run -- on another port, with its own
+        # node name -- so say how rather than just complaining.
+        n = sum(1 for x in self.graph_nodes if x == self.get_name())
+        if n > 1:
+            self.get_logger().warn(
+                f'{n} nodes are called "{self.get_name()}". Services and '
+                'parameters will go to whichever answers first. Give the '
+                'second one its own name:\n'
+                '    ros2 run rover_core rover_dashboard --ros-args '
+                '-r __node:=rover_dashboard_test -p port:=8081',
+                throttle_duration_sec=60.0)
 
     def list_maps(self):
         """Map YAMLs available to load, newest first. Cached: metrics() runs
