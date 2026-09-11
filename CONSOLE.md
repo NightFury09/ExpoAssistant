@@ -204,10 +204,61 @@ The second copy cannot bind :8080 and the page silently stops updating.
 
 ---
 
+## Driving it from Product_RAG_
+
+The console's page is just a client of a plain HTTP API, so the assistant can
+be one too. It needs no ROS, and does not have to run on the Jetson.
+
+`tools/rover_client.py` is that client — standard library only, drop it into
+the assistant's project:
+
+```python
+from rover_client import Rover
+
+rover = Rover("http://192.168.3.224:8080")
+
+# Check BEFORE offering. Offering a walk and then not moving is worse
+# than never offering.
+if rover.ready():
+    if "robotic_arm" in rover.places():
+        say("Would you like to see it? I can take you there.")
+        if visitor_said_yes:
+            rover.go("robotic_arm")
+            state = rover.wait(timeout=120)        # blocks
+            say("Here we are." if state == "arrived"
+                else "Sorry — I could not get through. Shall I try again?")
+else:
+    # A sentence you can say out loud, e.g. "the rover does not know
+    # where it is yet" or "no demo points have been marked".
+    log(rover.why_not_ready())
+```
+
+`ready()` is true only when navigation is up, the rover is localised, the
+e-stop is clear, demo points exist, **and** those points belong to the map
+that is loaded. That last one matters: points captured on another map are
+coordinates that mean nothing, and the rover would set off confidently to the
+wrong place.
+
+`go()` returns when Nav2 *accepts* the goal, not on arrival. Either call
+`wait()` on a background thread, or poll `status()` — a few hundred bytes,
+unlike `/api/metrics`, which carries the whole laser scan and plan.
+
+Always give the visitor a way out: `cancel()` stops any goal, including one
+set from the console. `estop(True)` is the bigger hammer — it halts the motors
+and cancels the goal, and nothing moves again until `estop(False)`.
+
+Try it without writing code:
+
+```bash
+python3 tools/rover_client.py places
+python3 tools/rover_client.py ready
+python3 tools/rover_client.py go robotic_arm --wait
+python3 tools/rover_client.py cancel
+```
+
 ## Endpoints
 
-The page is a client of a plain HTTP API, so anything else can drive the rover
-the same way. This is the hook for Product_RAG_:
+The API underneath, if you would rather call it directly:
 
 | method | path | body | does |
 |---|---|---|---|
@@ -219,7 +270,8 @@ the same way. This is the hook for Product_RAG_:
 | POST | `/api/wp/localise` | `{"name":"home"}` | the rover is standing at this point — set AMCL's pose from it |
 | POST | `/api/mode` | `{"mode":"navigation","map":"/path.yaml","switch":true}` | change mode; `switch` stops the running stack first |
 | POST | `/api/camera` | `{"on":true}` | RealSense on/off, independent of the stack |
-| POST | `/api/estop` | `{"on":true}` | stop everything |
+| POST | `/api/estop` | `{"on":true}` | halt the motors and cancel the goal |
+| GET | `/api/places` | | small, stable status for an assistant: `ready`, `places`, `nav.state`, pose |
 
 `nav.state` goes `sending → active → arrived` (or `aborted`), which is what an
 assistant would poll to know when to start talking.

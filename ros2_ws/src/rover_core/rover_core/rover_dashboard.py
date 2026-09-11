@@ -61,7 +61,7 @@ CMD_HZ     = 10.0
 DEADMAN_S  = 0.6
 STREAM_W   = 640
 JPEG_Q     = 70
-PORT       = 8080
+PORT       = 8080          # default; override with -p port:=8081
 
 SENSOR_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT,
                         history=HistoryPolicy.KEEP_LAST)
@@ -177,7 +177,7 @@ class Dash(Node):
         self.nav_req = None         # {'x','y','yaw'} goal waiting to be sent
         self.nav_cancel_req = False
         self.nav = {'state': 'idle', 'goal': None, 'remaining': None,
-                    'result': None, 'since': 0.0}
+                    'result': None, 'since': 0.0, 'place': None}
         self.nav_handle = None
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
         # Cancelling through the goal handle only works for goals THIS console
@@ -212,6 +212,10 @@ class Dash(Node):
         # The graph query runs on a ROS timer and the browser thread only ever
         # reads the cached answer: get_node_names() from an HTTP worker thread
         # is a cross-thread rcl call for no benefit.
+        # Overridable so a second console can be run for testing without
+        # taking the port from the one that owns the rover.
+        self.declare_parameter('port', PORT)
+        self.port = int(self.get_parameter('port').value)
         self.declare_parameter('map_dir', DEFAULT_MAP_DIR)
         self.map_dir = self.get_parameter('map_dir').value
         self.graph_nodes = []
@@ -247,7 +251,7 @@ class Dash(Node):
         self.create_subscription(Point32, '/encoder_ticks',
                                  lambda m: self._set('enc', (m.x, m.y, m.z)), 10)
         self.create_timer(1.0 / CMD_HZ, self.tick_cmd)
-        self.get_logger().info(f"dashboard on http://{local_ip()}:{PORT}")
+        self.get_logger().info(f"dashboard on http://{local_ip()}:{self.port}")
 
     def _set(self, name, val):
         with self.lock:
@@ -524,7 +528,7 @@ class Dash(Node):
         g.pose.pose.orientation.w = math.cos(th)
         self._set_nav('sending', goal=[round(req['x'], 3), round(req['y'], 3),
                                        round(req['yaw'], 1)],
-                      remaining=None, result=None)
+                      place=req.get('place'), remaining=None, result=None)
         fut = self.nav_client.send_goal_async(g, feedback_callback=self._nav_fb)
         fut.add_done_callback(self._nav_accepted)
         self.get_logger().info(
@@ -2141,6 +2145,39 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == '/api/metrics':
             self._send(200, 'application/json',
                        json.dumps(NODE.metrics()).encode())
+        elif self.path == '/api/places':
+            # Deliberately small and deliberately stable. An assistant polling
+            # /api/metrics would be coupled to every internal the dashboard
+            # happens to expose, and would be shipping the laser scan and the
+            # whole plan several times a second to read one word of state.
+            with NODE.lock:
+                names = sorted(NODE.wp['points'])
+                wp_map, cur_map = NODE.wp['map'], NODE.map_name
+                nav = dict(NODE.nav)
+                localised = NODE.map_pose is not None
+                pose = dict(NODE.map_pose) if NODE.map_pose else None
+                estop = NODE.estop
+            stack = NODE.sup.status()
+            # One flag worth trusting: is it safe to offer someone a walk to a
+            # demo station right now? Anything less and the assistant has to
+            # re-derive this, and will get it wrong.
+            ready = (stack['state'] == 'navigation' and localised
+                     and not estop and bool(names)
+                     and not (wp_map and cur_map and wp_map != cur_map))
+            self._send(200, 'application/json', json.dumps({
+                'ok': True,
+                'ready': ready,
+                'places': names,
+                'map': cur_map,
+                'places_map': wp_map,
+                'mode': stack['state'],
+                'localised': localised,
+                'pose': pose,
+                'estop': estop,
+                'nav': {'state': nav['state'], 'place': nav.get('place'),
+                        'remaining': nav['remaining'],
+                        'result': nav['result']},
+            }).encode())
         elif self.path == '/api/stacklog':
             self._send(200, 'application/json',
                        json.dumps({'lines': NODE.sup.tail(80)}).encode())
@@ -2275,7 +2312,7 @@ class Handler(BaseHTTPRequestHandler):
                            b'{"ok":false,"err":"e-stop engaged"}')
             else:
                 with NODE.lock:
-                    NODE.nav_req = dict(pt)
+                    NODE.nav_req = dict(pt, place=NODE.clean_name(body['name']))
                 self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/mode':
             want = str(body.get('mode', 'idle'))
@@ -2333,8 +2370,9 @@ def main(args=None):
     global NODE
     rclpy.init(args=args)
     NODE = Dash()
+    port = NODE.port
     try:
-        srv = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
+        srv = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     except OSError as e:
         if e.errno != errno.EADDRINUSE:
             raise
@@ -2342,14 +2380,14 @@ def main(args=None):
         # a socket traceback says nothing useful about it. The first one is
         # still serving; say so, and say how to take the port if that is really
         # what was wanted.
-        who = _port_holder(PORT)
+        who = _port_holder(port)
         NODE.get_logger().error(
-            f'a rover console is ALREADY running on port {PORT}'
+            f'a rover console is ALREADY running on port {port}'
             + (f' (pid {who})' if who else '') + '.\n'
-            f'    Open http://{local_ip()}:{PORT} -- that one is still serving, '
+            f'    Open http://{local_ip()}:{port} -- that one is still serving, '
             f'and it owns the running stack.\n'
             '    Only if you really want to replace it:  kill '
-            + (str(who) if who else f'$(fuser -n tcp {PORT} 2>/dev/null)') +
+            + (str(who) if who else f'$(fuser -n tcp {port} 2>/dev/null)') +
             '\n    The stack and camera keep running either way; a new console '
             'adopts them.')
         NODE.destroy_node()
