@@ -320,8 +320,11 @@ class StackSupervisor:
             return False, f'unknown mode "{key}"'
         if not self.running():
             return self.start(key, opts)
-        if self.mode == key:
+        if self.mode == key and dict(opts or {}) == dict(self.opts):
             return False, f'already in {STACKS[key].label}'
+        # Same mode but different options -- loading a different map -- is a
+        # real request. Restarting the stack is the only way to honour it, and
+        # making the operator press STOP first just leaves the rover dark.
         self.stop()
         # Let the graph settle. Departed nodes linger in other participants'
         # discovery caches well past process exit -- measured at more than ten

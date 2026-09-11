@@ -1797,9 +1797,12 @@ function stRender(st,maps,save,cam){
   $('#m-idle').classList.toggle('on',false);
   // Switching modes is allowed while a stack is up: it stops the old one and
   // starts the new one in a single action, so the rover is never left dark.
-  $('#m-nav').disabled=busy||s==='external'||s==='navigation';
+  const sameMap = s==='navigation' &&
+                  (st.opts&&st.opts.map)===$('#mapsel').value;
+  $('#m-nav').disabled=busy||s==='external'||sameMap;
   $('#m-map').disabled=busy||s==='external'||s==='mapping';
-  $('#m-nav').textContent=(s==='mapping')?'SWITCH TO NAVIGATE':'NAVIGATE';
+  $('#m-nav').textContent = s==='mapping' ? 'SWITCH TO NAVIGATE'
+                          : s==='navigation' ? 'LOAD THIS MAP' : 'NAVIGATE';
   $('#m-idle').disabled=idle||s==='external'||busy;
   $('#mapsel').disabled=busy;
   $('#row-save').hidden=(s!=='mapping');
@@ -1845,6 +1848,9 @@ async function setMode(mode,mapPath){
     // One action: stop the old stack, start the new one. "Leave mapping"
     // should never land on a dark rover.
     body.switch=true;
+    if(ST.state==='navigation'&&mode==='navigation'&&
+       !confirm('Reload navigation with this map?\n\nThe stack restarts and '+
+                'the pose estimate is lost, so set the pose again after.'))return;
     if(ST.state==='mapping'&&!confirm('Leave mapping?\n\nAnything not saved '+
        'with SAVE MAP is lost. The rover stays powered and comes straight up '+
        'in navigation.'))return;
