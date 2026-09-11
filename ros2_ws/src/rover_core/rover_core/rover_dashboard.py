@@ -1489,10 +1489,31 @@ const row=(k,v,c='')=>`<div class="m"><span class="k">${k}</span><span class="v 
 function cmdVec(){const m=boost?1.6:1;
   return {lin:((keys.w?1:0)-(keys.s?1:0))*speed*m,
           ang:((keys.a?1:0)-(keys.d?1:0))*turn*m};}
-async function send(){const c=cmdVec();
-  try{await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(c)});}catch(e){}}
-setInterval(send,100);
+// Never let requests stack up. setInterval fires whether or not the previous
+// request finished, so one slow response starts a backlog that only grows:
+// the browser allows ~6 connections per host, the rest queue, and the measured
+// latency climbs without limit. That is what "it works for a while then stops"
+// looks like -- 5 s round trips to a server answering in 5 ms.
+let sendBusy=false, lastSent=null;
+async function send(force){
+  if(sendBusy)return;
+  const c=cmdVec();
+  const zero=(c.lin===0&&c.ang===0);
+  const same=lastSent&&lastSent.lin===c.lin&&lastSent.ang===c.ang;
+  // Idle and already told it zero: say nothing. The node publishes NOTHING in
+  // idle so Nav2 keeps the wheel, and its own deadman zeroed long ago. This is
+  // 10 requests a second that bought nothing. A non-zero command is always
+  // resent, because the deadman does need to keep hearing it.
+  if(!force&&zero&&same)return;
+  sendBusy=true;
+  try{
+    await fetch('/api/cmd',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});
+    lastSent=c;
+  }catch(e){}
+  finally{sendBusy=false;}
+}
+setInterval(()=>send(false),100);
 function setKey(k,on){
   if(keys[k]===on)return; keys[k]=on;
   document.querySelectorAll('[data-k="'+k+'"]').forEach(b=>b.classList.toggle('held',on));
@@ -1500,7 +1521,7 @@ function setKey(k,on){
   const mag=Math.min(1,Math.hypot(c.lin/L.lin,c.ang/L.ang));
   $('#thrbar').style.width=(mag*100)+'%';
   $('#thr').textContent=(c.lin||c.ang)?(f(c.lin)+' · '+f(c.ang)):'idle';
-  send();}
+  send(true);}      // a key changed: send at once, even if it is the zero
 const release=()=>['w','a','s','d'].forEach(k=>setKey(k,false));
 // Typing must never drive. The name field also stops propagation, but the
 // guard belongs here so any future input is safe without remembering to.
@@ -1689,7 +1710,17 @@ async function poll(){
     row('E-stop',m.estop?'ENGAGED':'clear',m.estop?'bad':'ok');
   mapSync();
 }
-setInterval(poll,300); poll();
+// Self-scheduling rather than setInterval, for the same reason as send():
+// a slow response must delay the next poll, not queue behind it.
+let pollBusy=false;
+async function pollLoop(){
+  if(!pollBusy){
+    pollBusy=true;
+    try{await poll();}finally{pollBusy=false;}
+  }
+  setTimeout(pollLoop,300);
+}
+pollLoop();
 new ResizeObserver(draw).observe(document.body);
 
 /* ================= MAP VIEW =================
