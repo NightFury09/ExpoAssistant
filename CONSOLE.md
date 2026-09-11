@@ -140,11 +140,40 @@ Nav2 will actually avoid, not a separate prettier view. The `depth` readout at
 the bottom of the map says how many cells are live, or `no camera` / `stale` /
 `nothing in range` when they are not.
 
-**The camera only looks forward.** Its field of view is about 87°, so obstacles
-*behind* the rover that the lidar cannot see are invisible to both. The local
-costmap does remember a marked cell as the rover turns away — marks persist in
-its 3 m rolling window until something raytraces through them — so the practical
-habit is to let the rover face an area before asking it to reverse into it.
+### What the camera cannot see — the dashed teal wedge
+
+The dashed outline is the depth camera's actual coverage. Outside it, teal
+absence means **unobserved**, not clear.
+
+**Nothing within ~0.83 m of the rover's centre.** The D455 returns no depth
+closer than 0.6 m from the lens — measured on this unit, zero points below
+0.604 m, which is the sensor's own floor and not a filter — and the camera sits
+0.24 m ahead of the centre. So a chair right beside the rover shows up on the
+map as cells starting ~0.8 m out: its near face is simply not seen, and only
+its far side gets marked. That is why an obstacle you can touch can look
+further away than it is.
+
+**Nothing outside ±43.5°.** The camera looks forward only, so an obstacle
+behind the rover is invisible to depth, and the lidar's single 24 cm plane
+misses a chair almost entirely. The local costmap does remember a marked cell
+as the rover turns away — marks persist in its 3 m rolling window until
+something raytraces through them — so the practical habit is to let the rover
+face an area before asking it to reverse into it.
+
+### The mount calibration is NOT verified
+
+`tools/check_camera_mount.py` fits a floor plane, and in a cluttered room it
+fits the wrong plane. Three consecutive runs gave pitch errors of −5.45°,
++19.62° and +2.54°, with roll swinging from −0.9° to −11.6° — impossible for a
+camera bolted to a mast. It was locking onto desks and chair seats.
+
+Re-measure facing a **clear span of floor**, and before believing the number,
+check that `0.87 / tan(pitch)` — where the floor intersects — lands inside the
+camera's 4 m range. At the current 9.5° that is 5.2 m, already at the edge; at
+the 4° it recommended it is 12 m, and there is no floor in view at all.
+
+Pitch error mis-assigns **height**, not range, so it changes which obstacles
+pass the 0.10–1.20 m band. It is not why anything looks too far away.
 
 If the rover circle overlaps a wall on screen, it would overlap it in the room.
 That is the check to make before trusting a goal.

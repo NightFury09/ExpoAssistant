@@ -85,6 +85,23 @@ def generate_launch_description():
         # -0.19 deg). Note the sign: in ROS, POSITIVE pitch is nose-down.
         # Verify after any change to the mount:
         #   python3 tools/check_camera_mount.py
+        # 0.166 rad = 9.5 deg down. LEFT ALONE deliberately.
+        #
+        # check_camera_mount.py fits a floor plane and reported this
+        # over-states the tilt by 5.45 deg, recommending 0.071. Applying that
+        # made the fit far WORSE (pitch error 19.6 deg, roll 16.5 deg, height
+        # 0.51 m) -- because at 4 deg the floor is 0.87/tan(4) = 12 m away,
+        # outside the camera's 4 m usable range, so RANSAC had no floor to find
+        # and locked onto a desk or a wall instead. The original 9.5 deg puts
+        # the floor at 5.2 m, right at the edge of the fitted window, so that
+        # measurement is not trustworthy either.
+        #
+        # Re-measure on CLEAR FLOOR with the rover facing an empty span, and
+        # sanity-check that the reported floor intersection is inside 4 m
+        # before believing the number. Pitch error mis-assigns HEIGHT, not
+        # range, so it changes which obstacles pass the VoxelLayer's
+        # 0.10-1.20 m band -- it is not the cause of anything looking too far
+        # away, which is the near blind zone below.
         DeclareLaunchArgument('cam_pitch', default_value='0.166',
                               description='camera pitch in radians, POSITIVE = nose-down'),
     ]

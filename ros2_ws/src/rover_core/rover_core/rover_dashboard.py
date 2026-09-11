@@ -60,6 +60,19 @@ CLOUD_CELL = 0.08          # metres; bin to this before sending
 CLOUD_MAX_PTS = 600        # hard cap on what goes over the wire
 CLOUD_PERIOD = 0.5         # seconds between processed clouds
 
+# What the depth camera physically CANNOT see, so the page can draw it.
+#
+# The D455 returns no depth closer than ~0.6 m from the lens -- measured on
+# this unit: zero points below 0.604 m, which is the sensor's own floor and not
+# a filter of ours. The camera also sits 0.24 m forward of the rover's centre,
+# so that blind sphere projects to roughly 0.8 m from the centre. A chair
+# closer than that is invisible to depth, and the lidar's single 24 cm plane
+# misses a chair almost entirely. That combination is why an obstacle right
+# beside the rover can appear on the map as though it were further away: the
+# near part of it is not seen at all, and only its far side gets marked.
+CLOUD_FOV_DEG = 87.0       # D455 horizontal field of view
+CAM_FORWARD = 0.24         # camera offset ahead of base centre, metres
+
 # Stamp of this file. The page carries the same value and reloads itself when
 # the two differ, so an open tab can never keep running yesterday's JavaScript
 # after a rebuild -- a stale tab is indistinguishable from a broken feature.
@@ -1010,6 +1023,14 @@ class Dash(Node):
                                          for k, v in self.wp['points'].items()}},
                 'plan': list(self.plan),
                 'cloud': list(self.cloud),
+                # Drawn on the map so "the camera sees nothing there" is
+                # visible rather than indistinguishable from "nothing is there".
+                'cloud_fov': {
+                    'near': round(CLOUD_RANGE_MIN * math.cos(0.166)
+                                  + CAM_FORWARD, 2),
+                    'far': round(CLOUD_RANGE_MAX * math.cos(0.166)
+                                 + CAM_FORWARD, 2),
+                    'half_deg': CLOUD_FOV_DEG / 2.0},
                 'cloud_age': (round(time.time() - self.cloud_at, 1)
                               if self.cloud_at else None),
                 'path': list(self.path),
@@ -1390,6 +1411,7 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 4px;
           <span><i style="background:#f85149"></i>scan</span>
           <span><i style="background:#4d9fff"></i>plan</span>
           <span><i style="background:#2ec9c9"></i>depth</span>
+          <span><i style="background:transparent;outline:1px dashed #2ec9c9"></i>camera sees</span>
           <span><i style="background:#a371f7"></i>demo point</span>
           <span><i style="background:#3fb950"></i>base</span>
         </div>
@@ -1917,6 +1939,22 @@ function drawMap(){
       g.stroke();
       const e=M.plan[M.plan.length-1];
       g.fillStyle='#4d9fff';g.beginPath();g.arc(sx(e[0]),sy(e[1]),5,0,TAU);g.fill();}
+    if(showCloud&&M.cloud_fov&&M.cam_proc&&M.cam_proc.state==='on'){
+      // The wedge the depth camera can actually see. Everything outside it --
+      // the near circle especially -- is unobserved, not empty. Without this
+      // an obstacle that is merely too close to be seen looks like an obstacle
+      // that is further away than it really is.
+      const F=M.cloud_fov, th=P?P.yaw*Math.PI/180:0;
+      const a0=th-F.half_deg*Math.PI/180, a1=th+F.half_deg*Math.PI/180;
+      g.save();
+      g.strokeStyle='rgba(46,201,201,.34)';
+      g.lineWidth=1.2; g.setLineDash([5,4]);
+      g.beginPath();
+      g.arc(sx(P.x),sy(P.y),F.near*mapScale,-a1,-a0);
+      g.arc(sx(P.x),sy(P.y),F.far*mapScale,-a0,-a1,true);
+      g.closePath(); g.stroke();
+      g.restore();
+    }
     if(showCloud&&M.cloud&&M.cloud.length){
       // Drawn first, so a lidar return is never hidden behind a depth cell.
       // These are the same cells the local costmap's VoxelLayer marks from --
