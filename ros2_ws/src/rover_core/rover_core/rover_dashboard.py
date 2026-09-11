@@ -499,8 +499,23 @@ class Dash(Node):
             self.nav['since'] = time.time()
             self.nav.update(kw)
 
+    # How long to wait for Nav2 to ACCEPT a goal before giving up on it.
+    # Acceptance is near-instant when the stack is healthy; a goal sent while
+    # the stack is restarting is never answered at all, and the UI would sit on
+    # "sending" for ever with the operator unable to tell a busy rover from a
+    # dead one.
+    SEND_TIMEOUT = 10.0
+
     def tick_nav(self):
         """Drain browser requests on the ROS thread."""
+        with self.lock:
+            st, since = self.nav['state'], self.nav['since']
+        if st == 'sending' and time.time() - since > self.SEND_TIMEOUT:
+            self._set_nav('failed', goal=None, remaining=None,
+                          result='Nav2 never accepted the goal — is the stack '
+                                 'still starting?')
+            self.get_logger().warn('goal was never accepted; giving up on it')
+
         with self.lock:
             req, cancel = self.nav_req, self.nav_cancel_req
             self.nav_req, self.nav_cancel_req = None, False
@@ -1089,6 +1104,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
  padding:4px 11px;border-radius:6px;background:var(--acc2);color:#fff;
  font:600 clamp(9px,1.05vh,11px)/1 inherit;white-space:nowrap;pointer-events:none}
 .mhint.warn{background:#8a6d1b}
+.mhint.bad{background:#8a2620}
 .navbar{flex:none;display:flex;align-items:center;gap:7px;padding:6px var(--g);
  border-top:1px solid var(--line);background:var(--panel2)}
 .navbar .st{font:700 clamp(9px,1.05vh,11px)/1 var(--mono);letter-spacing:.06em}
@@ -1908,12 +1924,25 @@ $('#t-pan').onclick =()=>setTool('pan');
 $('#t-goal').onclick=()=>setTool(tool==='goal'?'pan':'goal');
 $('#t-pose').onclick=()=>setTool(tool==='pose'?'pan':'pose');
 const navLive=()=>!!(M&&M.nav&&['active','sending','cancelling'].includes(M.nav.state));
+// A transient message centred under the map toolbar -- where the button that
+// caused it is. The status strip at the bottom of the card is too far from the
+// press to read as a reply, which made a working CANCEL NAV look broken.
+let toastT=null;
+function toast(msg,kind){
+  const h=$('#mhint');
+  h.className='mhint'+(kind==='warn'?' warn':kind==='bad'?' bad':'');
+  h.textContent=msg; h.hidden=false;
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>{if(tool==='pan')h.hidden=true;},2600);
+}
 async function cancelNav(){
   // Always say something. A button that silently does nothing when there is no
   // goal to cancel is indistinguishable from a broken button.
   const act=navLive();
   await fetch('/api/nav_cancel',{method:'POST',body:'{}'});
-  $('#nav-de').textContent=act?'cancelling…':'nothing to cancel — no goal is running';
+  const msg=act?'cancelling the goal…':'nothing to cancel — no goal is running';
+  $('#nav-de').textContent=msg;
+  toast(msg, act?'':'warn');
 }
 $('#t-cancel').onclick=cancelNav;
 $('#hcancel').onclick=cancelNav;
@@ -2135,8 +2164,10 @@ async function fire(t,a){
   try{
     const r=await fetch(url,{method:'POST',body:body});
     const j=await r.json();
-    if(!j.ok)$('#nav-de').textContent=j.err||'rejected';
-  }catch(e){$('#nav-de').textContent='request failed';}
+    if(!j.ok){$('#nav-de').textContent=j.err||'rejected';
+              toast(j.err||'rejected','bad');}
+    else toast(t==='goal'?'goal sent':'pose set — check the scan lands on the walls');
+  }catch(e){$('#nav-de').textContent='request failed';toast('request failed','bad');}
 }
 
 /* pan / zoom / follow
