@@ -89,6 +89,21 @@ face when it arrives (point it at the visitor, not at the wall).
 Name one of them `home` or `base` and it is drawn in green — that is where
 "return to base" goes.
 
+### I'M HERE — the fix for re-localising after a restart
+
+AMCL forgets its pose every time the stack restarts, which at an expo is every
+power cycle and every map change. Dragging **SET POSE** by eye is imprecise and
+has to be redone perfectly each time, and a sloppy initial pose is the one
+thing everything downstream depends on.
+
+So: mark the rover's parking spot on the floor with tape, capture it once as a
+waypoint called `home`, and from then on park the rover on the tape and press
+**I'M HERE** next to it. Exact, repeatable, one button. Then check the red scan
+points land on the walls before sending a goal.
+
+It works on any waypoint, not just `home` — if the rover is standing at a demo
+station, localise from that one.
+
 Points are stored in `config/demo_waypoints.yaml` together with the name of the
 map they were captured on. Load a different map and the console says so in red
 rather than sending the rover to coordinates that mean nothing.
@@ -201,6 +216,7 @@ the same way. This is the hook for Product_RAG_:
 | GET | `/api/metrics` | | everything: `nav.state`, `nav.remaining`, pose, waypoints, mode |
 | POST | `/api/goal` | `{"x":,"y":,"yaw":}` | arbitrary goal, degrees |
 | POST | `/api/wp/save` | `{"name":"x","here":true}` | capture the current pose |
+| POST | `/api/wp/localise` | `{"name":"home"}` | the rover is standing at this point — set AMCL's pose from it |
 | POST | `/api/mode` | `{"mode":"navigation","map":"/path.yaml","switch":true}` | change mode; `switch` stops the running stack first |
 | POST | `/api/camera` | `{"on":true}` | RealSense on/off, independent of the stack |
 | POST | `/api/estop` | `{"on":true}` | stop everything |

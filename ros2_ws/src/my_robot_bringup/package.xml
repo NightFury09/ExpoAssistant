@@ -7,6 +7,24 @@
   <maintainer email="rptech@todo.todo">rptech</maintainer>
   <license>TODO: License declaration</license>
 
+  <!-- Runtime dependencies of the launch files in launch/. These were all
+       missing, so colcon had no reason to build rover_core before this package
+       and rosdep could not install any of it on a fresh machine. It only
+       worked here because everything happened to be installed already.
+       master_navigation and slam_teleop now also run rover_core's scan_filter
+       in the sensor path, which makes that ordering matter. -->
+  <exec_depend>rover_core</exec_depend>
+  <exec_depend>rover_description</exec_depend>
+  <exec_depend>rplidar_ros</exec_depend>
+  <exec_depend>micro_ros_agent</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>foxglove_bridge</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

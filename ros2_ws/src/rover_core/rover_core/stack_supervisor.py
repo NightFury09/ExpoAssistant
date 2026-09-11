@@ -133,6 +133,12 @@ class StackSupervisor:
         self.logfile = ''
         self.opts = {}
         self._stopping = False
+        # True for the whole of a switch. Without it status() reports 'idle'
+        # (or 'external', on stale graph entries) in the gap between stopping
+        # one stack and starting the next, the UI re-enables its buttons, and a
+        # second press lands in the middle of the change -- start() then refuses
+        # the switch's own start and the operator is left with nothing running.
+        self._busy = False
         # The camera runs on its own, outliving stack restarts.
         self.cam = None
         self.cam_log = ''
@@ -167,6 +173,11 @@ class StackSupervisor:
 
     def status(self):
         live = self.live_nodes()
+        if self._busy and not self.running():
+            return {'state': 'stopping', 'mode': self.mode,
+                    'detail': self.detail, 'ready': 'switching',
+                    'since': self.since, 'opts': dict(self.opts), 'log': '',
+                    'nodes': sorted(n.lstrip('/') for n in live)}
         if self.running():
             st = self.mode
             need = STACKS[self.mode].nodes if self.mode in STACKS else []
@@ -322,9 +333,18 @@ class StackSupervisor:
             return self.start(key, opts)
         if self.mode == key and dict(opts or {}) == dict(self.opts):
             return False, f'already in {STACKS[key].label}'
+        if self._busy:
+            return False, 'a mode change is already in progress'
         # Same mode but different options -- loading a different map -- is a
         # real request. Restarting the stack is the only way to honour it, and
         # making the operator press STOP first just leaves the rover dark.
+        self._busy = True
+        try:
+            return self._switch(key, opts)
+        finally:
+            self._busy = False
+
+    def _switch(self, key, opts):
         self.stop()
         # Let the graph settle. Departed nodes linger in other participants'
         # discovery caches well past process exit -- measured at more than ten
@@ -339,7 +359,15 @@ class StackSupervisor:
         if stale:
             self._log.info('supervisor: starting over stale graph entries: ' +
                            ', '.join(sorted(n.lstrip("/") for n in stale)))
-        return self.start(key, opts, force=True)
+        ok, msg = self.start(key, opts, force=True)
+        if not ok:
+            # The old stack is already gone, so this leaves the rover with
+            # nothing running. Say that plainly rather than reporting a bare
+            # launch error the operator has to interpret.
+            self._log.error(f'supervisor: switch to {key} failed: {msg}')
+            return False, (f'{msg} -- the previous stack was already stopped, '
+                           'so nothing is running now')
+        return ok, msg
 
     def stop(self):
         if not self.running():

@@ -1122,6 +1122,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .wp button{flex:none;border:1px solid var(--line2);background:transparent;
  color:var(--dim);cursor:pointer;border-radius:5px;padding:4px 8px;
  font:700 clamp(8.5px,1vh,10px)/1 inherit}
+.wp button.at{border-color:var(--warn);color:var(--warn)}
+.wp button.at:hover{background:var(--warn);color:#0b0e12}
 .wp button.go{border-color:var(--acc2);color:var(--acc)}
 .wp button.go:hover{background:var(--acc2);color:#fff}
 .wp button.rm:hover{border-color:var(--bad);color:var(--bad)}
@@ -1957,12 +1959,20 @@ function wpRender(){
     return `<div class="wp${isBase(n)?' base':''}">
       <span class="nm">${esc(n)}</span>
       <span class="co">${p.x.toFixed(2)}, ${p.y.toFixed(2)}</span>
+      <button class="at" data-at="${esc(n)}"
+        title="The rover is standing here right now — set its pose from this point"
+        >I'M HERE</button>
       <button class="go" data-go="${esc(n)}">GO</button>
       <button class="rm" data-rm="${esc(n)}">✕</button></div>`;}).join('')
     : `<div class="wpempty">No demo points yet.<br>
        Name a spot below and save it.</div>`;
   $('#wplist').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>
     post('/api/wp/goto',{name:b.dataset.go}));
+  $('#wplist').querySelectorAll('[data-at]').forEach(b=>b.onclick=async()=>{
+    const j=await post('/api/wp/localise',{name:b.dataset.at});
+    if(j.ok){$('#wpnote').className='wpnote ok';
+      $('#wpnote').textContent='Pose set from "'+b.dataset.at+
+        '". Check the scan points land on the walls.';}});
   $('#wplist').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
     if(confirm('Delete demo point "'+b.dataset.rm+'"?'))
       post('/api/wp/delete',{name:b.dataset.rm});});
@@ -2236,6 +2246,24 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, 'application/json',
                        json.dumps({'ok': ok,
                                    'err': None if ok else 'no such waypoint'}).encode())
+        elif self.path == '/api/wp/localise':
+            # Park the rover on a marked spot, press one button, done.
+            #
+            # AMCL forgets its pose on every stack restart, and at an expo the
+            # stack restarts whenever the rover is power-cycled or the map is
+            # changed. Re-setting it by dragging on the map is imprecise and
+            # has to be redone perfectly every time -- and a sloppy initial
+            # pose is the single thing everything downstream depends on. A
+            # waypoint captured at a physical floor marker is exact and
+            # repeatable, which is what a demo day needs.
+            with NODE.lock:
+                pt = NODE.wp['points'].get(NODE.clean_name(body.get('name', '')))
+            if pt is None:
+                self._send(404, 'application/json',
+                           b'{"ok":false,"err":"no such waypoint"}')
+            else:
+                NODE.set_initial_pose(pt['x'], pt['y'], pt['yaw'])
+                self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/wp/goto':
             with NODE.lock:
                 pt = NODE.wp['points'].get(NODE.clean_name(body.get('name', '')))
