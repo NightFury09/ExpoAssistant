@@ -892,3 +892,45 @@ other way needs the YAML edited by hand.
 **Why it is easy to miss:** the map *looks* right in RViz and Foxglove, because
 they render 0 and -1 differently only by shade. The difference is invisible
 until the planner draws a path through the car park.
+
+---
+
+## nav2_container dies with exit code -11 (SIGSEGV) right after "Configuring global_costmap"
+
+**Symptom:** the navigation stack comes up, then `component_container_isolated`
+dies with `exit code -11`. Looks like memory corruption. It is not.
+
+**Cause:** a costmap layer's YAML block is missing its `plugin:` key. nav2's
+own plugin loader (`nav2_util::get_plugin_type_param`, in
+`node_utils.hpp`) does this with no fallback:
+
+```cpp
+if (!node->get_parameter(plugin_name + ".plugin", plugin_type)) {
+  RCLCPP_FATAL(node->get_logger(), "Can not get 'plugin' param value for %s", ...);
+  exit(-1);
+}
+```
+
+`exit(-1)` inside one composed node terminates the **whole container
+process** — every other nav2 node sharing it dies too, mid-construction,
+and a segfault on the way down is exactly what shows up in the launch log.
+The real error is one line above it:
+
+```
+[FATAL] [global_costmap.global_costmap]: Can not get 'plugin' param value for static_layer
+```
+
+**Always read the FATAL line, not just the exit code.** grep for it:
+
+```bash
+grep FATAL logs/navigation-*.log
+```
+
+**Found here 2026-09-15:** the global costmap's `static_layer` block had
+carried only `map_subscribe_transient_local: True` since the very first
+commit — no `plugin:` line — while the local costmap's copy always had one.
+Whether this crashes depends on exact timing in the composed container, so
+it did not fail every single launch; it looked intermittent, which delayed
+finding it. Every layer entry in every costmap needs its `plugin:` key. If
+you copy a layer block between the local and global costmap sections, copy
+the whole thing.

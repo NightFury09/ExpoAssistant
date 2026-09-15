@@ -4,12 +4,28 @@
   Recovery order, one action per retry (RoundRobin, 6 retries):
 
     1. clear costmaps            stale marks from people who already moved
-    2. wait 4s                   let a person step aside
-    3. back up 0.25m             give the planner room if the ROVER is the
+    2. wait 2s                   let a person step aside
+    3. spin +60 deg              LOOK: sweep the camera left for a way through
+    4. back up 0.20m             give the planner room if the ROVER is the
                                  thing that is too close
-    4. spin +45 deg              look left for another way through
-    5. spin -90 deg              look right
-    6. wait 6s                   last chance before aborting
+    5. spin -120 deg             sweep right
+    6. wait 4s                   last chance before aborting
+
+  Reordered and shortened 2026-09-15. Spinning now comes BEFORE backing up
+  because spinning is the only action that changes what the sensors can see,
+  and the camera is a forward-facing 87 deg cone, so rotating is how the rover
+  discovers that the gap beside the chair is real. Backing up blind, first,
+  bought nothing and cost two seconds.
+
+  The waits are halved. They exist for a person stepping aside, which takes
+  about a second; four and six seconds were a rover standing still looking
+  broken.
+
+  None of this is the real fix for sluggishness. Recoveries were firing
+  constantly because the GLOBAL costmap could not see the camera, so the
+  planner kept routing through chairs the lidar cannot detect. That is fixed in
+  nav2_params.yaml. These numbers only govern what happens when something
+  genuinely blocks the way.
 
   The order encodes which explanation is most likely, cheapest first. Two
   situations look identical to the planner and need opposite responses: a
@@ -53,7 +69,7 @@
   <BehaviorTree ID="MainTree">
     <RecoveryNode number_of_retries="8" name="NavigateRecovery">
       <PipelineSequence name="NavigateWithReplanning">
-        <RateController hz="1.0">
+        <RateController hz="2.0">
           <RecoveryNode number_of_retries="1" name="ComputePathToPose">
             <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
@@ -71,11 +87,11 @@
             <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
           </Sequence>
+          <Wait wait_duration="2"/>
+          <Spin spin_dist="1.05"/>
+          <BackUp backup_dist="0.20" backup_speed="0.12"/>
+          <Spin spin_dist="-2.09"/>
           <Wait wait_duration="4"/>
-          <BackUp backup_dist="0.25" backup_speed="0.10"/>
-          <Spin spin_dist="0.79"/>
-          <Spin spin_dist="-1.57"/>
-          <Wait wait_duration="6"/>
         </RoundRobin>
       </ReactiveFallback>
     </RecoveryNode>

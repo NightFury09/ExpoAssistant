@@ -140,7 +140,14 @@ controller_server:
     min_x_velocity_threshold:     0.001
     min_y_velocity_threshold:     0.5
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
+    # Seconds the controller may fail to produce a command before giving up
+    # and handing over to a recovery. 0.3 s is less than one replanning cycle,
+    # so a momentary block -- a person stepping across, a chair appearing at
+    # the edge of the costmap -- went straight to a recovery dance instead of
+    # waiting for the planner to route around it. 1.5 s spans three replans at
+    # the new 2 Hz, which is enough for the ordinary case to resolve itself
+    # without any theatre.
+    failure_tolerance: 1.5
 
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins:   ["goal_checker"]
@@ -164,7 +171,10 @@ controller_server:
       plugin: "nav2_controller::PoseProgressChecker"
       required_movement_radius: 0.3
       required_movement_angle: 0.5      # rad; turning this much counts
-      movement_time_allowance: 25.0
+      # Down from 25. If the rover genuinely has not moved 0.3 m or turned
+      # 0.5 rad in 15 s it is stuck, and spending another ten seconds proving
+      # it just delays the recovery that would free it.
+      movement_time_allowance: 15.0
 
     goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
@@ -421,8 +431,11 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
+      # 1 Hz meant a new obstacle took up to a second to reach the planner, and
+      # the plan another second to change. At 0.22 m/s that is nearly half a
+      # metre of travel spent committed to a path that is already wrong.
+      update_frequency: 3.0
+      publish_frequency: 2.0
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: false
@@ -450,7 +463,19 @@ global_costmap:
       # or a booth surface.
       robot_radius: 0.33
       resolution: 0.05
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      # The camera belongs HERE as much as in the local costmap. Without it
+      # the planner is blind to anything the lidar's single 24 cm plane misses
+      # -- an office chair, most obviously -- so it routes a path straight
+      # through one, the controller meets it, fails, a recovery fires, and then
+      # it replans THE SAME PATH THROUGH THE SAME CHAIR. That loop is what made
+      # the rover feel sluggish: it was not avoiding obstacles at all, it was
+      # repeatedly discovering them at the last moment.
+      #
+      # Cost: a person who walks past leaves a mark until the camera looks that
+      # way again and raytraces it clear. The rover revisits the same ground at
+      # an expo so it self-heals, and the first recovery action still clears
+      # both costmaps outright.
+      plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -483,13 +508,51 @@ global_costmap:
           # and re-check from a second, different parking spot.
           obstacle_min_range: 0.15
           raytrace_min_range: 0.0
-        # The D455 is deliberately NOT a source on the GLOBAL costmap. Its
-        # contribution is transient and noisy, and depth false-positives written
-        # into the global map persist and block planning. Camera obstacles live
-        # in the LOCAL costmap's voxel_layer, where the controller reacts to
-        # them -- the standard, safe arrangement.
+        # Reversed 2026-09-15: the D455 IS now a source here too (see the
+        # voxel_layer added below). Keeping it out was the direct cause of the
+        # "sluggish, stuttery" recoveries reported at the expo -- the GLOBAL
+        # planner, blind to anything the lidar's single 24 cm plane misses,
+        # routed a path straight through a chair every time, the controller
+        # met it, failed, a recovery fired, and the very next replan sent it
+        # through the same chair again. Depth false positives are a real cost
+        # (a person who walks past leaves a mark until the camera re-clears
+        # it), but a planner that cannot see what it is driving into is worse.
       static_layer:
+        # This 'plugin' key was MISSING since the very first commit of this
+        # file -- the local costmap's static_layer had it, this one never did.
+        # nav2_costmap_2d treats a missing plugin type as FATAL and the
+        # container dies (SIGSEGV on the way down). It happened to go unnoticed
+        # because -- as far as can be told -- this exact code path is a race:
+        # sometimes the container comes up before hitting it, sometimes not.
+        # Found 2026-09-15 chasing a genuine crash. Do not remove.
+        plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
+      # Same band and source as the local costmap's copy, so both agree about
+      # what counts as an obstacle. Longer raytrace range than the local one:
+      # this map is not a 3 m rolling window, so it has to be able to clear a
+      # mark left behind several metres back.
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: False
+        origin_z: 0.0
+        z_resolution: 0.10
+        z_voxels: 16
+        max_obstacle_height: 1.60
+        mark_threshold: 1
+        combination_method: 1
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /camera/camera/depth/color/points
+          data_type: "PointCloud2"
+          marking: True
+          clearing: True
+          min_obstacle_height: 0.10
+          max_obstacle_height: 1.20
+          obstacle_min_range: 0.45
+          obstacle_max_range: 4.0
+          raytrace_min_range: 0.45
+          raytrace_max_range: 5.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
