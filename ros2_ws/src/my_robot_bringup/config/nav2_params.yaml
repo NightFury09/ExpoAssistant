@@ -107,9 +107,17 @@ behavior_server:
     # the rear IS sensed even though the camera faces forward. Raise this if
     # backup_speed is ever increased, or the check stops covering the move.
     simulate_ahead_time: 2.5
-    max_rotational_vel: 0.6
+    # Governs ONLY the Spin/BackUp recovery behaviours -- entirely separate
+    # from FollowPath's max_angular_accel (0.7), which stays untouched because
+    # it was deliberately tuned down to stop path-following jerk. Raising THIS
+    # cannot bring that back: an in-place spin sweeps the same footprint area
+    # regardless of speed, and simulate_ahead_time above still collision-checks
+    # the motion before committing to it, so this is a pure time saving, not a
+    # safety trade. 0.6 rad/s took ~2.4s for a 60 deg recovery spin and ~4.1s
+    # for 120; at 1.0/1.8 that drops to ~1.6s and ~2.6s.
+    max_rotational_vel: 1.0
     min_rotational_vel: 0.2
-    rotational_acc_lim: 1.0
+    rotational_acc_lim: 1.8
 
 bt_navigator:
   ros__parameters:
