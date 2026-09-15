@@ -71,7 +71,10 @@ CLOUD_PERIOD = 0.5         # seconds between processed clouds
 # beside the rover can appear on the map as though it were further away: the
 # near part of it is not seen at all, and only its far side gets marked.
 CLOUD_FOV_DEG = 87.0       # D455 horizontal field of view
-CAM_FORWARD = 0.24         # camera offset ahead of base centre, metres
+# The camera's forward offset is READ FROM TF, not written here. It was a
+# constant, and a constant duplicating the launch file is a constant that goes
+# stale: the mount moved to -0.12 m and this would have kept drawing the blind
+# zone as though it were still at +0.24.
 
 # Stamp of this file. The page carries the same value and reloads itself when
 # the two differ, so an open tab can never keep running yesterday's JavaScript
@@ -193,6 +196,7 @@ class Dash(Node):
         self.cloud = []             # depth obstacles, (x, y) in the MAP frame
         self.cloud_at = 0.0         # when it was last refreshed
         self._cloud_t = 0.0         # throttle
+        self.cam_fwd = None         # camera offset ahead of base, from TF
         self.tf_buf = tf2_ros.Buffer()
         self.tf_lis = tf2_ros.TransformListener(self.tf_buf, self)
 
@@ -721,6 +725,17 @@ class Dash(Node):
         if now - self._cloud_t < CLOUD_PERIOD:
             return
         self._cloud_t = now
+        if self.cam_fwd is None:
+            try:
+                b = self.tf_buf.lookup_transform(
+                    'base_link', m.header.frame_id, rclpy.time.Time())
+                self.cam_fwd = round(b.transform.translation.x, 3)
+                self.get_logger().info(
+                    f'camera sits {self.cam_fwd:+.2f} m from base centre; '
+                    f'depth blind inside '
+                    f'{CLOUD_RANGE_MIN * 0.986 + self.cam_fwd:.2f} m')
+            except Exception:
+                pass
         try:
             tf = self.tf_buf.lookup_transform(
                 'map', m.header.frame_id, rclpy.time.Time())
@@ -1025,12 +1040,11 @@ class Dash(Node):
                 'cloud': list(self.cloud),
                 # Drawn on the map so "the camera sees nothing there" is
                 # visible rather than indistinguishable from "nothing is there".
-                'cloud_fov': {
-                    'near': round(CLOUD_RANGE_MIN * math.cos(0.166)
-                                  + CAM_FORWARD, 2),
-                    'far': round(CLOUD_RANGE_MAX * math.cos(0.166)
-                                 + CAM_FORWARD, 2),
-                    'half_deg': CLOUD_FOV_DEG / 2.0},
+                'cloud_fov': ({
+                    'near': round(CLOUD_RANGE_MIN * 0.986 + self.cam_fwd, 2),
+                    'far': round(CLOUD_RANGE_MAX * 0.986 + self.cam_fwd, 2),
+                    'half_deg': CLOUD_FOV_DEG / 2.0}
+                    if self.cam_fwd is not None else None),
                 'cloud_age': (round(time.time() - self.cloud_at, 1)
                               if self.cloud_at else None),
                 'path': list(self.path),

@@ -72,13 +72,23 @@ def generate_launch_description():
         # 0.24 m: measured 2026-09-09, lens at the exact mid-point of the deck's
         # forward overhang. base_link is the chassis centre, so this is forward
         # of it.
-        DeclareLaunchArgument('cam_x',     default_value='0.24',
+        # Measured 2026-09-15: the camera is 34 cm back from the FRONT edge of
+        # the 44 cm deck, and base_link is at the deck centre, so it sits at
+        # 0.22 - 0.34 = -0.12 m -- 12 cm BEHIND centre, not 24 cm ahead of it.
+        #
+        # The old +0.24 was out by 0.36 m and pushed every depth point that far
+        # forward, which is exactly the reported symptom: a chair beside the
+        # rover drawn as though it were most of a metre away. The measured
+        # nearest depth cell was 0.78 m; corrected it lands at 0.42 m, against
+        # a predicted near limit of 0.48 m.
+        DeclareLaunchArgument('cam_x',     default_value='-0.12',
                               description='camera lens forward offset from chassis centre (m)'),
         DeclareLaunchArgument('cam_y',     default_value='0.0',
                               description='camera lens lateral offset, +left (m)'),
         # 0.850 measured by floor-plane fit, not by tape. Tape said 0.82 to the
         # camera body; the fit resolves the lens's optical centre.
-        DeclareLaunchArgument('cam_z',     default_value='0.850',
+        # 0.82 m, the height given for the mount.
+        DeclareLaunchArgument('cam_z',     default_value='0.820',
                               description='camera lens height above the floor (m)'),
         # 0.166 rad = 9.51 deg NOSE-DOWN, calibrated 2026-09-09 by fitting a
         # plane to the floor (10024 inliers, 8 mm residual, residual pitch error

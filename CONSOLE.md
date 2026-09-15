@@ -132,7 +132,8 @@ Drag to pan, scroll to zoom, **⤢** fits the map, **◎** keeps the rover centr
 The lidar scans a single plane at 24 cm. An office chair is a pedestal and five
 thin spokes at floor level with its whole mass above that plane, so the lidar
 sees almost nothing of it and the rover will drive straight into one. The
-camera sits at 82 cm looking slightly down and sees the seat and back.
+camera sits at 82 cm, 12 cm behind the deck centre, looking 9.5° down, and sees
+the seat and back.
 
 The teal cells are the same points the local costmap's VoxelLayer marks from —
 filtered to the same 0.10–1.20 m height band — so what you see drawn is what
@@ -145,13 +146,15 @@ the bottom of the map says how many cells are live, or `no camera` / `stale` /
 The dashed outline is the depth camera's actual coverage. Outside it, teal
 absence means **unobserved**, not clear.
 
-**Nothing within ~0.83 m of the rover's centre.** The D455 returns no depth
+**Nothing within ~0.47 m of the rover's centre.** The D455 returns no depth
 closer than 0.6 m from the lens — measured on this unit, zero points below
-0.604 m, which is the sensor's own floor and not a filter — and the camera sits
-0.24 m ahead of the centre. So a chair right beside the rover shows up on the
-map as cells starting ~0.8 m out: its near face is simply not seen, and only
-its far side gets marked. That is why an obstacle you can touch can look
-further away than it is.
+0.604 m, which is the sensor's own floor and not a filter of ours. The camera
+sits 0.12 m *behind* the centre, so that blind sphere projects to about 0.47 m
+ahead of it — just past the 0.33 m footprint. A chair closer than that is still
+invisible to depth, and the lidar misses it too.
+
+The console reads that offset from TF rather than storing its own copy, so the
+drawn blind zone always matches the mount the camera is actually launched with.
 
 **Nothing outside ±43.5°.** The camera looks forward only, so an obstacle
 behind the rover is invisible to depth, and the lidar's single 24 cm plane
