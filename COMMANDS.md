@@ -1,193 +1,261 @@
 # Rover — Command Reference
 
-Startup and operations cheat‑sheet for the differential‑drive rover
-(Jetson AGX Orin → micro‑ROS/ESP32 → RMCS‑2303 drivers → RMCS motors + RPLIDAR).
+**Almost everything is done in the browser, not the terminal.**
+The console at **http://192.168.3.224:8080** starts and stops the stacks, drives
+the rover, builds and loads maps, marks demo points and sends goals. See
+`CONSOLE.md`.
 
-> **Every terminal must source both setup files first:**
+This file is for the rest: managing the service, diagnosing a problem, and the
+few things that have no button.
+
+> Every terminal that talks to ROS needs both of these first:
 > ```bash
-> source /opt/ros/humble/setup.bash
-> source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
+> source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
 > ```
-> The micro‑ROS **agent** needs a third source: `source ~/microros_ws/install/setup.bash`
+> Shortcut — add to `~/.bashrc`: `alias rs='source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash'`
 
 ---
 
-## 1. Full SLAM bringup (the normal way to run everything)
+## 1. The service — the only thing that must be running
 
-**One command brings up the whole stack** (ESP32 reset → agent → odometry → RPLIDAR → SLAM → Foxglove):
+It starts at boot. Note the **`--user`**: without it systemctl looks for a
+system-wide unit that does not exist and says "could not be found".
 
 ```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 launch my_robot_bringup slam_teleop.launch.py
+systemctl --user status rover-console
+```
+```bash
+systemctl --user restart rover-console
+```
+```bash
+systemctl --user stop rover-console
+```
+```bash
+systemctl --user start rover-console
 ```
 
-- Wait ~15 s. Watch the log for the agent connecting, `current scan mode: Sensitivity ... 10.0 Hz` (lidar), then SLAM registering the sensor.
-- It prints a green **Foxglove** URL: `ws://192.168.3.224:8765`
-- **Keep this terminal running the entire session.** Only Ctrl+C it when completely done (and after saving the map).
+**`restart` and `stop` also stop whatever stack the console launched** — they
+share its cgroup. Save your map before restarting.
 
-Then, in a **second terminal**, run teleop (below) to drive.
-
----
-
-## 2. Teleop (drive the rover)
+Re-install or upgrade the unit:
 
 ```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 run rover_core rover_teleop_v2
+~/AGX_Orin_Backup/rover_project/systemd/install.sh
 ```
 
-| Key | Action |
-|-----|--------|
-| `W` / `S` | Forward / Backward |
-| `A` / `D` | Turn Left / Turn Right |
-| `+` / `-` | Speed up / down (live, while driving) |
-| `SPACE` / `X` | Stop |
-| `ESC` | Quit |
-
-Default start speed 0.40 m/s; range 0.05–1.50 m/s. Drive **slowly** for good maps.
-
----
-
-## 3. Save the map
-
-Run **while the launch/SLAM is still running** (separate terminal):
+Run it in a terminal instead (only when the service is stopped):
 
 ```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 run nav2_map_server map_saver_cli -f ~/AGX_Orin_Backup/rover_project/maps/my_map
+source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 run rover_core rover_dashboard
 ```
 
-Writes `maps/my_map.pgm` (image) + `maps/my_map.yaml` (metadata).
-**If it says "Failed to spin map subscription", SLAM isn't running or hadn't started yet** — the map lives inside the running `slam_toolbox` node.
+A second console for testing, on its own port **and its own node name**:
 
----
-
-## 4. Reset the map / restart SLAM
-
-**If the launch is still running** (fast — keeps lidar/odometry/agent up):
 ```bash
-pkill -f async_slam_toolbox_node
-```
-then start a fresh SLAM in its own terminal:
-```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file ~/AGX_Orin_Backup/rover_project/ros2_ws/install/my_robot_bringup/share/my_robot_bringup/config/slam_params.yaml -p use_sim_time:=false
-```
-To reset again later: just Ctrl+C that SLAM terminal and re-run the command.
-
-**If the launch is NOT running:** don't restart SLAM alone (nothing feeds it). Just re‑run the full launch (Section 1).
-
----
-
-## 5. Run individual nodes (manual / debugging)
-
-Only needed when NOT using the full launch. Each in its own terminal.
-
-**micro‑ROS agent** (ROS ↔ ESP32 bridge):
-```bash
-source /opt/ros/humble/setup.bash && source ~/microros_ws/install/setup.bash && ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyESP32 -b 115200
-```
-
-**Odometry** (publishes `/odom`, `/tf`, `/heading_deg`):
-```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 run rover_core rover_odometry
-```
-
-**RPLIDAR** (publishes `/scan`):
-```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash && ros2 run rplidar_ros rplidar_node --ros-args -p serial_port:=/dev/ttyLIDAR -p serial_baudrate:=115200 -p frame_id:=laser_frame -p scan_mode:=Sensitivity
+ros2 run rover_core rover_dashboard --ros-args -r __node:=rover_dashboard_test -p port:=8081
 ```
 
 ---
 
-## 6. Flash the ESP32 firmware (PlatformIO)
+## 2. Logs — where to look when something fails
 
-> **Free the serial port first** — the agent/monitor must be closed or the upload fails with "port busy":
-> ```bash
-> lsof -t /dev/ttyUSB0 2>/dev/null | xargs -r kill
-> ```
+The console's own output. **Not `journalctl`** — this machine has no
+`/var/log/journal`, so its journal is wiped on every reboot.
 
-**Main teleop firmware (firmware_v2):**
 ```bash
-cd ~/AGX_Orin_Backup/rover_project/uros_ws/src/esp32_rover_firmware_v2 && pio run --target upload --upload-port /dev/ttyESP32
+tail -f ~/AGX_Orin_Backup/rover_project/logs/console.log
 ```
 
-**Standalone motor test firmware** — pick one environment:
-```bash
-cd ~/AGX_Orin_Backup/rover_project/uros_ws/src/motor_test && pio run -e <ENV> -t upload --upload-port /dev/ttyESP32
-```
-| ENV | What it does |
-|-----|--------------|
-| `left_only`  | Left motor only, CW/CCW loop |
-| `right_only` | Right motor only, CW/CCW loop |
-| `both`       | Both motors, WASD sequence |
-| `diag`       | Register dump + live speed/position sampling |
-| `dirprobe`   | Direction-determinism probe |
-| `health`     | Full motor health report card (PASS/FAIL) |
+Every stack launch writes its own file. When a stack fails to come up, the
+reason is in the newest one:
 
-**Watch serial output** (for the standalone test firmwares — NOT firmware_v2, whose UART0 is used by micro‑ROS):
 ```bash
-pio device monitor --port /dev/ttyESP32 --baud 115200
+ls -t ~/AGX_Orin_Backup/rover_project/logs/ | head
+```
+```bash
+tail -40 $(ls -t ~/AGX_Orin_Backup/rover_project/logs/navigation-*.log | head -1)
+```
+
+Errors only, from the newest navigation log:
+
+```bash
+grep -E "\[ERROR\]|\[WARN\]" $(ls -t ~/AGX_Orin_Backup/rover_project/logs/navigation-*.log | head -1) | tail -20
 ```
 
 ---
 
-## 7. Rebuild ROS 2 packages (after editing source)
+## 3. After changing code
 
 ```bash
-cd ~/AGX_Orin_Backup/rover_project/ros2_ws && source /opt/ros/humble/setup.bash && colcon build --packages-select <package>
+cd ~/AGX_Orin_Backup/rover_project/ros2_ws && colcon build --packages-select rover_core --symlink-install
 ```
-Packages: `rover_core` (teleop, odometry), `my_robot_bringup` (launch, configs),
-`rover_description` (URDF). **Restart the affected node** after rebuilding for the change to take effect.
+
+Smoke-test on a spare port **before** restarting the service — it catches
+errors that only appear at runtime, without taking the rover down:
+
+```bash
+ros2 run rover_core rover_dashboard --ros-args -r __node:=smoke -p port:=8089
+```
+
+Then:
+
+```bash
+systemctl --user restart rover-console
+```
+
+The browser reloads itself when the server reports a new build, so no manual
+refresh is needed.
 
 ---
 
-## 8. Health checks / verification
+## 4. Is the rover healthy?
+
+One line for everything:
 
 ```bash
-source /opt/ros/humble/setup.bash && source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
+curl -s localhost:8080/api/metrics | python3 -m json.tool | head -40
 ```
-| Check | Command |
-|-------|---------|
-| Running nodes | `ros2 node list` |
-| Driver comms flag | `ros2 topic echo /encoder_ticks --field z` |
-| Wheel command feedback | `ros2 topic echo /wheel_ticks` |
-| Odometry pose | `ros2 topic echo /odom --field pose.pose.position` |
-| Heading (deg, unwrapped) | `ros2 topic echo /heading_deg` |
-| Lidar rate | `ros2 topic hz /scan` |
-| TF map→odom | `ros2 run tf2_ros tf2_echo map odom` |
 
-**`/encoder_ticks` `z` flag = instant driver diagnosis:**
-`0` = both drivers OK · `1` = LEFT (id 2) silent · `2` = RIGHT (id 7) silent · `3` = neither (usually GND / power).
+The assistant-facing summary — small, and the one to poll:
+
+```bash
+curl -s localhost:8080/api/places | python3 -m json.tool
+```
+
+**The drivetrain check. Reach for this first whenever the rover moves oddly.**
+`x` = /cmd_vel messages received, `y` = watchdog stops, `z` = commanded RPM.
+If `x` is not climbing while you drive, commands are not reaching the ESP32 and
+no amount of Nav2 tuning will help:
+
+```bash
+ros2 topic echo /rover_diag
+```
+
+Devices present?
+
+```bash
+ls -l /dev/ttyESP32 /dev/ttyLIDAR && lsusb | grep -i 8086
+```
+
+**Camera on USB 2 or USB 3?** 5000 = USB 3, 480 = USB 2 and about a quarter of
+the frame rate:
+
+```bash
+for d in /sys/bus/usb/devices/*/; do [ "$(cat $d/idVendor 2>/dev/null)" = "8086" ] && echo "D455 link: $(cat $d/speed) Mbit/s"; done
+```
 
 ---
 
-## 9. Shutdown / cleanup
+## 5. Diagnostics with no button
+
+All under `tools/`, all read-only unless stated.
 
 ```bash
-# Stop everything cleanly: Ctrl+C the launch terminal. If nodes are orphaned:
-pkill -9 -f "ros2 launch my_robot_bringup"
-pkill -9 -f "slam_toolbox|micro_ros_agent|rover_odometry|rplidar_node|robot_state_pub|foxglove_bridge|rover_teleop"
-# Confirm ports free:
-lsof /dev/ttyUSB0 /dev/ttyUSB1 2>/dev/null || echo "PORTS FREE"
+cd ~/AGX_Orin_Backup/rover_project
 ```
+
+| command | what it answers |
+|---|---|
+| `python3 tools/check_lidar.py` | Is the lidar data any good? Run **stationary**. Shows per-sector ranges — how you find self-hits. |
+| `python3 tools/check_localization.py` | Does the live scan match the loaded map? Run after setting the pose. |
+| `python3 tools/check_reachable.py X Y` | Can the planner reach this point — **without moving the rover**. |
+| `python3 tools/find_goal.py` | Suggests goals the planner can actually reach. Reads the costmap, not the map. |
+| `python3 tools/check_camera_mount.py` | Fits the floor to check the D455 mount. **Needs clear floor** — see the warning in `CONSOLE.md`; it fits desks and chair seats in a cluttered room and gives a different answer every run. |
 
 ---
 
-## Reference
+## 6. Driving it from another program (Product_RAG_)
 
-**Serial devices:** `/dev/ttyESP32` → `ttyUSB0` (ESP32, 115200) · `/dev/ttyLIDAR` → `ttyUSB1` (RPLIDAR, 115200)
-Modbus to drivers runs at **9600** baud.
+```bash
+python3 tools/rover_client.py places
+```
+```bash
+python3 tools/rover_client.py ready
+```
+```bash
+python3 tools/rover_client.py go robotic_arm --wait
+```
+```bash
+python3 tools/rover_client.py cancel
+```
+```bash
+python3 tools/rover_client.py estop on
+```
 
-**ESP32 ↔ RMCS‑2303 wiring** (cross TX↔RX; shared GND mandatory; 3.3 V direct):
+`ready` exits 0 when it is safe to offer somebody a walk, non-zero otherwise
+with the reason. In Python: `from rover_client import Rover`.
 
-| Wheel | Slave ID | ESP32 TX→RXD | ESP32 RX←TXD | GND |
-|-------|----------|--------------|--------------|-----|
-| LEFT  | 2 | GPIO 13 → Pin 2 | GPIO 14 ← Pin 3 | GPIO GND ↔ Pin 1 |
-| RIGHT | 7 | GPIO 17 → Pin 2 | GPIO 16 ← Pin 3 | GPIO GND ↔ Pin 1 |
+---
 
-**Odometry calibration (in `rover_odometry.py`):** `wheel_radius = 0.0257 m`, `wheel_separation = 0.4621 m`.
+## 7. Emergencies
 
-**Foxglove:** connect to `ws://192.168.3.224:8765`; 3D panel → Fixed frame `map`; enable `/map` and `/scan`.
+**Stop the rover now** — halts the motors and cancels the goal:
 
-**Golden rules**
-1. Source both setup files in every terminal.
-2. Free the serial port before flashing (kill the agent).
-3. Keep the launch running the whole time you map; save the map before stopping it.
-4. Drive slowly for clean maps.
+```bash
+curl -s -X POST localhost:8080/api/estop -d '{"on":true}'
+```
+```bash
+curl -s -X POST localhost:8080/api/estop -d '{"on":false}'
+```
+
+Cancel just the goal, leave the rover live:
+
+```bash
+curl -s -X POST localhost:8080/api/nav_cancel -d '{}'
+```
+
+Stop everything, cleanly:
+
+```bash
+systemctl --user stop rover-console
+```
+
+Something is holding port 8080 and you do not know what:
+
+```bash
+ss -lptnH 'sport = :8080'
+```
+
+**Never `kill -9` the RealSense node** — it wedges the V4L2 device until the
+camera is physically unplugged. The console's own shutdown escalates slowly for
+exactly this reason.
+
+---
+
+## 8. Things that are NOT commands any more
+
+Launching a stack by hand fights the console, which refuses to start a second
+one and reports `EXTERNAL`. Use the MAP tab. If you must, stop the console
+first.
+
+<details>
+<summary>The old by-hand bringup, for reference only</summary>
+
+```bash
+ros2 launch my_robot_bringup slam_teleop.launch.py
+```
+```bash
+ros2 launch my_robot_bringup master_navigation.launch.py map:=/home/rptech/AGX_Orin_Backup/rover_project/maps/room_map_v6.yaml
+```
+```bash
+ros2 launch my_robot_bringup realsense.launch.py
+```
+
+Both stacks take `use_dashboard`, which must stay **false**: the console
+already owns :8080 and a second copy cannot bind it.
+</details>
+
+---
+
+## 9. Git
+
+```bash
+cd ~/AGX_Orin_Backup/rover_project && git status --short
+```
+```bash
+cd ~/AGX_Orin_Backup/rover_project && git log --oneline -10
+```
+
+The remote is SSH (`git@github.com:NightFury09/ExpoAssistant.git`). Maps and
+launch logs are gitignored; `config/demo_waypoints.yaml` is **not** — the demo
+points are the deliverable.
