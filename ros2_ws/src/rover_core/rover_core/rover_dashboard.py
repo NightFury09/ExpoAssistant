@@ -1297,9 +1297,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 /* ---------- camera ---------- */
 #camcard{flex:1}
 .vidwrap{flex:1;position:relative;background:#000;overflow:hidden}
-#hud-idle{display:none;flex-direction:column;align-items:center;gap:10px;
+/* Shown and hidden with el.hidden ALONE. Mixing the hidden attribute with a
+   class that sets display is what broke this: [hidden] carries !important, so
+   the class could never win and the banner never appeared. One mechanism per
+   element. */
+#hud-idle{display:flex;flex-direction:column;align-items:center;gap:10px;
  text-align:center;padding:0 24px;pointer-events:auto}
-#hud-idle.show{display:flex}
 #hud-idle b{font-size:clamp(14px,2.2vh,20px);color:var(--fg)}
 #hud-idle span{font-size:clamp(11px,1.4vh,13px);color:var(--dim);max-width:34em;
  line-height:1.6}
@@ -1796,7 +1799,7 @@ async function poll(){
   chip('#c-mode', md==='manual'?'warn':md==='estop'?'bad':'ok',
        md==='manual'?'MANUAL':md==='estop'?'E-STOP':'AUTO');
   const nothing=(ss==='idle');
-  $('#hud-idle').classList.toggle('show', nothing);
+  $('#hud-idle').hidden = !nothing;
   $('#hud-msg').style.display = nothing ? 'none' : '';
   chip('#c-lat',lat<150?'ok':lat<400?'warn':'bad',lat+'ms');
   chip('#c-esp',m.diag.ok?'ok':'bad',m.diag.ok?'on':'off');
