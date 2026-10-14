@@ -1,1 +1,0 @@
-/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_msgs/ament_cmake_core/micro_ros_msgsConfig-version.cmake

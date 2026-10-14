@@ -1,7 +1,12 @@
-# ROS 2 / colcon build artifacts
+# ROS 2 / colcon build artifacts, in both workspaces. They hold absolute paths
+# and compiled binaries for the machine that built them, so every rebuild
+# rewrote hundreds of tracked files. A fresh clone builds them -- see README.md.
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
+uros_ws/build/
+uros_ws/install/
+uros_ws/log/
 
 # PlatformIO build artifacts
 .pio/

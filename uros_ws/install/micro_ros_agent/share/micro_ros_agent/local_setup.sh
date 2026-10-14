@@ -1,1 +1,0 @@
-/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/build/micro_ros_agent/ament_cmake_environment_hooks/local_setup.sh

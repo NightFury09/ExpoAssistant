@@ -1,1 +1,0 @@
-/home/rptech/AGX_Orin_Backup/rover_project/uros_ws/src/micro_ros_setup/scripts/create_agent_ws.sh
