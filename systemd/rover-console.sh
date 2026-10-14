@@ -8,7 +8,12 @@
 # setting it, so nounset makes sourcing ROS fail outright.
 set -e
 source /opt/ros/humble/setup.bash
-source /home/rptech/microros_ws/install/setup.bash 2>/dev/null || true
+# The micro-ROS agent, built in this repo's uros_ws. Sourced explicitly: until
+# now it was found only because ros2_ws had happened to be built with uros_ws
+# already sourced. Built any other way, every stack failed to find
+# micro_ros_agent. Tolerated if missing so the console still comes up and can
+# say what is wrong.
+source /home/rptech/AGX_Orin_Backup/rover_project/uros_ws/install/local_setup.bash 2>/dev/null || true
 source /home/rptech/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
 
 # The console supervises `ros2 launch` children; they inherit this environment,
