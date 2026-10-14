@@ -8,6 +8,13 @@ It runs **outside** every ROS stack and stays up while stacks come and go. That
 is deliberate — it is what lets it start and stop them, and it is what makes
 two stacks at once impossible.
 
+**No network?** On the rover's own screen, open **Rover Console** from the app
+menu (`desktop/install.sh` adds it). It is this same page in its own window,
+loaded from `127.0.0.1`, so it needs no Wi-Fi, router or second device. The
+ROS stacks talk over loopback too, so the whole rover works offline. Closing
+the window does not stop the console or the stack — like closing a tab, the
+deadman stops the motors.
+
 ---
 
 ## The two tabs

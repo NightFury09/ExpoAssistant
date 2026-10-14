@@ -5,6 +5,13 @@ The console at **http://192.168.3.224:8080** starts and stops the stacks, drives
 the rover, builds and loads maps, marks demo points and sends goals. See
 `CONSOLE.md`.
 
+On the rover's own screen, open **Rover Console** from the app menu instead:
+the same console in its own window, loaded over loopback, so it works with
+Wi-Fi off. Install the launcher once with `desktop/install.sh`, or
+`desktop/install.sh --autostart` to open it full screen at every login. If the
+service is down, the app starts it. F11 toggles full screen. Boot setup and how
+it works: `desktop/README.md`.
+
 This file is for the rest: managing the service, diagnosing a problem, and the
 few things that have no button.
 

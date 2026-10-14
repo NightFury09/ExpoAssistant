@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#12171d"/>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="none" stroke="#2e3a46" stroke-width="4"/>
+  <!-- lidar sweep -->
+  <path d="M64 30 L36 22 A30 30 0 0 1 92 22 Z" fill="#4d9fff" opacity=".35"/>
+  <rect x="56" y="30" width="16" height="12" rx="3" fill="#4d9fff"/>
+  <!-- body -->
+  <rect x="26" y="44" width="76" height="40" rx="9" fill="#e8eef5"/>
+  <rect x="36" y="54" width="22" height="10" rx="3" fill="#12171d"/>
+  <circle cx="84" cy="59" r="5" fill="#3fb950"/>
+  <!-- wheels -->
+  <circle cx="42" cy="90" r="13" fill="#8998a8"/>
+  <circle cx="42" cy="90" r="5" fill="#12171d"/>
+  <circle cx="86" cy="90" r="13" fill="#8998a8"/>
+  <circle cx="86" cy="90" r="5" fill="#12171d"/>
+</svg>
