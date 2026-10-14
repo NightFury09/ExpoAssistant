@@ -1800,7 +1800,6 @@ async function poll(){
        md==='manual'?'MANUAL':md==='estop'?'E-STOP':'AUTO');
   const nothing=(ss==='idle');
   $('#hud-idle').hidden = !nothing;
-  $('#hud-msg').style.display = nothing ? 'none' : '';
   chip('#c-lat',lat<150?'ok':lat<400?'warn':'bad',lat+'ms');
   chip('#c-esp',m.diag.ok?'ok':'bad',m.diag.ok?'on':'off');
   chip('#c-lidar',m.lidar.ok?'ok':'bad',m.lidar.ok?f(m.lidar.hz,0)+'Hz':'off');
@@ -1822,7 +1821,11 @@ async function poll(){
   document.querySelectorAll('#views button').forEach(b=>{
     const v=b.dataset.v;
     b.disabled = (v!=='color') && (v!==view) && (av[v]===false) && !m.camera.ok;});
-  $('#hud-msg').style.display=(m.camera.ok&&av[view]!==false)?'none':'block';
+  // One place decides #hud-msg. It used to be hidden for the idle banner above
+  // and then set back to 'block' here whenever the camera was off -- which, with
+  // nothing running, is always -- so both sat centred on top of each other.
+  $('#hud-msg').style.display=
+    (nothing||(m.camera.ok&&av[view]!==false))?'none':'block';
   $('#camtag').textContent=m.camera.ok?f(m.camera.hz,0)+' fps':'no signal';
 
   const n=m.lidar.nearest_fwd, A=$('#alert');
