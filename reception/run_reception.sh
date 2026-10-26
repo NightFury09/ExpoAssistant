@@ -61,15 +61,29 @@ log "OpenCV OK: $("$PYTHON" -c 'import cv2;print(cv2.__version__)' 2>/dev/null)"
 # systemd can start us before the USB webcam has enumerated after a boot, so we
 # give it a chance. If it never shows, we still start: reception.py's capture
 # watchdog keeps retrying and shows "Connecting to camera..." until it appears.
-cam_dev="/dev/video${RS_WEBCAM}"
-waited=0
-while [ ! -e "$cam_dev" ] && [ "$waited" -lt "$CAM_WAIT" ]; do
+# The webcam is found by what it is -- a USB capture node that is not an Intel
+# RealSense -- the same rule reception.py uses. Checking /dev/video${RS_WEBCAM}
+# alone reported "webcam OK" for the rover's D455 whenever that enumerated first.
+find_webcam() {
+  local d vid idx
+  for d in /sys/class/video4linux/video*; do
+    [ -e "$d" ] || continue
+    vid=$(cat "$(readlink -f "$d/device")/../idVendor" 2>/dev/null || true)
+    idx=$(cat "$d/index" 2>/dev/null || true)
+    if [ -n "$vid" ] && [ "$vid" != "8086" ] && [ "${idx:-0}" = "0" ]; then
+      echo "/dev/${d##*/}"; return 0
+    fi
+  done
+  return 1
+}
+waited=0; cam_dev=""
+until cam_dev=$(find_webcam) || [ "$waited" -ge "$CAM_WAIT" ]; do
   sleep 1; waited=$((waited + 1))
 done
-if [ -e "$cam_dev" ]; then
-  log "webcam OK: $cam_dev present after ${waited}s"
+if [ -n "$cam_dev" ]; then
+  log "webcam OK: $cam_dev ($(cat "/sys/class/video4linux/${cam_dev#/dev/}/name" 2>/dev/null || true)) after ${waited}s"
 else
-  log "WARNING: $cam_dev not present after ${CAM_WAIT}s — starting anyway; the app will reconnect when the camera appears (check the USB cable / try RS_WEBCAM=1)."
+  log "WARNING: no USB webcam after ${CAM_WAIT}s (RealSense cameras are skipped: they belong to the rover) — starting anyway; the app picks the webcam up when it is plugged in."
 fi
 
 # --- preflight 4: port availability (warn only) ------------------------------

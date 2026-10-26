@@ -43,7 +43,9 @@ def _f(n, d):
         return float(d)
 
 
-WEBCAM        = int(_f("RS_WEBCAM", 0))            # /dev/videoN index
+WEBCAM        = _s("RS_WEBCAM", "0").strip()      # preferred /dev/videoN index, or "auto"
+V4L_SYS       = "/sys/class/video4linux"
+REALSENSE_VID = "8086"                             # Intel RealSense: the rover's camera
 WIDTH         = int(_f("RS_WIDTH", 1280))
 HEIGHT        = int(_f("RS_HEIGHT", 720))
 PORT          = int(_f("RS_PORT", 8001))
@@ -247,20 +249,74 @@ def show_msg(title, sub, enc):
         SH.publish(jpeg.tobytes())
 
 
+def _sysfs(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def find_webcam(sysfs=V4L_SYS):
+    """The /dev/videoN to open, or None when no usable webcam is plugged in.
+
+    Chosen by what the device IS, not by its number. Numbers follow plug-in
+    order, and the rover's RealSense D455 alone creates six nodes, so with it
+    plugged in first "video0" was the D455 -- reception then grabbed the rover's
+    camera. Usable means: a USB device, not an Intel RealSense, and the UVC
+    capture node (index 0) rather than its metadata node (index 1). RS_WEBCAM is
+    preferred when it names a usable node; "auto" (or anything unusable) takes
+    the lowest-numbered usable one.
+    """
+    try:
+        nodes = sorted(int(d[5:]) for d in os.listdir(sysfs)
+                       if d.startswith("video") and d[5:].isdigit())
+    except OSError:
+        return None
+    usable = []
+    for n in nodes:
+        base = os.path.join(sysfs, f"video{n}")
+        # device -> the USB interface; the USB device above it has idVendor.
+        vid = _sysfs(os.path.join(os.path.realpath(os.path.join(base, "device")),
+                                  "..", "idVendor"))
+        if vid and vid != REALSENSE_VID and _sysfs(os.path.join(base, "index")) in ("", "0"):
+            usable.append(n)
+    if WEBCAM.isdigit() and int(WEBCAM) in usable:
+        return int(WEBCAM)
+    return usable[0] if usable else None
+
+
 def capture_loop(fe):
     """Webcam watchdog: (re)open the camera and stream; survives a USB drop."""
     enc = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
-    cap = None; fi = 0; miss = 0
+    cap = None; fi = 0; miss = 0; waiting = False
     while True:
         if cap is None or not cap.isOpened():
             show_msg("Connecting to camera...", "USB webcam", enc)
-            cap = cv2.VideoCapture(WEBCAM)
+            dev = find_webcam()
+            if dev is None:
+                # Nothing to open, so do not ask OpenCV: each failed open logged
+                # four V4L2/GStreamer warnings, every 1.5 s -- ~100k syslog lines
+                # a day while the webcam was unplugged. Say it once instead.
+                if not waiting:
+                    print("[reception] waiting for a USB webcam "
+                          "(RealSense cameras are left to the rover)", flush=True)
+                    waiting = True
+                SH.status = {"cam_ok": False, "faces": 0, "captured": len(SH.pending_embs),
+                             "views": ENROLL_VIEWS}
+                time.sleep(1.5); continue
+            # V4L2 directly: it is what opened the webcam before, and without it
+            # OpenCV falls back to a GStreamer pipeline on every failure.
+            cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
             if not cap.isOpened():
                 SH.status = {"cam_ok": False, "faces": 0, "captured": len(SH.pending_embs),
                              "views": ENROLL_VIEWS}
                 time.sleep(1.5); continue
+            name = _sysfs(os.path.join(V4L_SYS, f"video{dev}", "name")) or "webcam"
+            print(f"[reception] webcam: /dev/video{dev} ({name})", flush=True)
+            waiting = False
         ok, img = cap.read()
         if not ok:
             miss += 1
