@@ -1,0 +1,49 @@
+[Unit]
+Description=RP tech Reception check-in station (Orin Nano + USB webcam)
+Documentation=file:/home/rptech/reception/DEPLOY.md
+# Start after the network is actually up so the booth is reachable at boot.
+Wants=network-online.target
+After=network-online.target
+# If it crashes hard repeatedly, stop after 6 tries in 120s (surfaces real
+# deploy errors in the journal instead of an endless fast restart loop).
+StartLimitIntervalSec=120
+StartLimitBurst=6
+
+[Service]
+Type=simple
+User=rptech
+Group=rptech
+# Explicit camera access even though rptech is already in the video group.
+SupplementaryGroups=video
+WorkingDirectory=/home/rptech/reception
+
+# Defaults (override any of these by editing this unit, or in /etc/reception.env).
+Environment=RS_BOOTH_URL=http://127.0.0.1:8000
+Environment=RS_ENROLL_TOKEN=rover-reception
+Environment=RS_WEBCAM=0
+Environment=RS_PORT=8001
+Environment=RS_WIDTH=1280
+Environment=RS_HEIGHT=720
+# Optional operator overrides; the leading '-' makes a missing file non-fatal.
+EnvironmentFile=-/etc/reception.env
+
+ExecStart=/home/rptech/reception/run_reception.sh
+
+# Resilience: always come back from a crash / camera loss / transient error,
+# with a short backoff. The launcher's own watchdog handles camera hotplug, so
+# most transient issues never reach systemd.
+Restart=always
+RestartSec=3
+TimeoutStartSec=90
+TimeoutStopSec=15
+# reception.py exits cleanly on SIGINT (KeyboardInterrupt); use it for stop.
+KillSignal=SIGINT
+KillMode=mixed
+
+# Logging goes to the journal:  journalctl -u reception -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reception
+
+[Install]
+WantedBy=multi-user.target

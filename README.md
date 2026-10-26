@@ -309,6 +309,7 @@ rover_project/
 │   └── motor_test/              one-motor-at-a-time test firmware (old left/right labels)
 ├── systemd/                the console service and its installer
 ├── desktop/                the console as a desktop app
+├── reception/              visitor check-in station, a separate app (service off for now; see its DEPLOY.md)
 ├── tools/                  diagnostics that answer with a number
 ├── foxglove/               a saved Foxglove Studio layout
 ├── config/                 demo stations; created when the first one is saved
