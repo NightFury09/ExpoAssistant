@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from rover_core.roam import clearance_map, pick_goal
+from rover_core.roam import clearance_map, costmap_to_grid, pick_goal
 
 RES = 0.05
 META = {'res': RES, 'ox': 0.0, 'oy': 0.0}
@@ -116,3 +116,52 @@ def test_small_room_relaxes_the_minimum_distance():
     g[5:25, 5:25] = 0
     goal, why = pick_goal(g, META, (0.5, 0.5), clearance_m=0.2, min_dist=2.0)
     assert goal is not None, why
+
+
+def test_never_offers_a_spot_the_planner_refused():
+    g = room()
+    rng = np.random.default_rng(5)
+    refused = [(2.0, 1.0), (1.0, 3.0), (4.0, 2.0)]
+    for _ in range(60):
+        goal, why = pick_goal(g, META, (1.0, 1.0), rng=rng, rejected=refused)
+        assert goal is not None, why
+        for rx, ry in refused:
+            assert math.hypot(goal['x'] - rx, goal['y'] - ry) >= 0.6 - 1e-6
+
+
+def test_refused_spots_are_not_forgiven_when_the_room_is_small():
+    # `recent` is relaxed in a small room; `rejected` must not be.
+    g = np.full((60, 60), 100, np.int16)
+    g[5:55, 5:55] = 0
+    refused = [(1.5, 1.5)]
+    rng = np.random.default_rng(6)
+    for _ in range(40):
+        goal, _ = pick_goal(g, META, (1.0, 1.0), recent=[(1.2, 1.2)], rng=rng,
+                            clearance_m=0.3, rejected=refused)
+        assert goal is None or math.hypot(goal['x'] - 1.5, goal['y'] - 1.5) >= 0.6 - 1e-6
+
+
+def test_costmap_values_map_onto_the_occupancy_scale():
+    out = costmap_to_grid(np.array([0, 253, 254, 255], dtype=np.uint8))
+    assert out.tolist() == [0, 100, 100, -1]    # free, inscribed, lethal, unknown
+
+
+def test_the_inflation_gradient_is_monotonic_and_stays_below_blocked():
+    gradient = costmap_to_grid(np.arange(0, 253, dtype=np.uint8))
+    assert gradient[0] == 0
+    assert np.all(np.diff(gradient) >= 0)       # more cost never reads as less
+    assert gradient.max() <= 98                 # and never reaches the blocked 100
+
+
+def test_inflated_cells_are_not_picked_from_a_costmap():
+    # A costmap whose middle band is inscribed (253) must keep goals out of it.
+    raw = np.zeros((80, 120), np.uint8)
+    raw[:, 55:65] = 253
+    raw[0, :] = raw[-1, :] = raw[:, 0] = raw[:, -1] = 254
+    grid = costmap_to_grid(raw)
+    rng = np.random.default_rng(7)
+    for _ in range(40):
+        goal, why = pick_goal(grid, META, (1.0, 2.0), rng=rng, clearance_m=0.1)
+        assert goal is not None, why
+        assert not (2.7 <= goal['x'] <= 3.3), 'goal landed in the blocked band'
+        assert goal['x'] < 2.7, 'stays on its own side of the band'
