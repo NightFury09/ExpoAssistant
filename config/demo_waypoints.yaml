@@ -1,0 +1,8 @@
+# Demo waypoints for the rover console.
+# Captured against the map named below -- coordinates do not carry across maps.
+map: live SLAM
+points:
+  Lab_incomplete:
+    x: -0.556
+    y: 0.251
+    yaw: 49.2
