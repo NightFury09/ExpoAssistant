@@ -21,6 +21,7 @@ source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
 | `send_goal.py` | Send it there |
 | `save_waypoint.py` | Record the current pose as a named demo station |
 | `test_roam_with_fake_nav2.py` | Does free roam start, roam, and stop for every safety rule? Runs the real console against a fake Nav2; **no rover needed**, about 2 minutes |
+| `test_odometry_tf.py` | Is the odometry transform fast and fresh enough for AMCL? Runs the real odometry node on simulated ticks; **no rover needed**, ~25 s |
 | `rover_client.py roam on\|off` | Free roam from another program or a terminal |
 
 ---

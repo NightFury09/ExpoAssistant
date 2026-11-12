@@ -8,6 +8,19 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
 from tf2_ros import TransformBroadcaster
 
+def extrapolate(x, y, th, v, w, h):
+    """Where the rover will be h seconds after its last measured pose, if it
+    keeps its last measured speed (v m/s forward, w rad/s turning).
+
+    The same midpoint rule the tick callback integrates with, so a prediction
+    that turns out right is indistinguishable from a measurement.
+    """
+    th_mid = th + w * h / 2.0
+    return (x + v * h * math.cos(th_mid),
+            y + v * h * math.sin(th_mid),
+            th + w * h)
+
+
 class RoverOdometry(Node):
     def __init__(self):
         super().__init__('rover_odometry')
@@ -50,11 +63,34 @@ class RoverOdometry(Node):
         # Set False under Nav2, where the EKF owns odom->base_footprint instead,
         # so we don't get two publishers fighting over the same transform.
         self.declare_parameter('publish_tf', True)
+        # The odom->base_footprint transform is published on a timer, not once
+        # per /wheel_ticks message. Ticks arrive only ~3.5 times a second (two
+        # blocking Modbus reads per update, 9600 baud), but laser scans arrive
+        # ~7.8 times a second and reach their consumers ~0.13 s after they were
+        # measured. A scan can be used only once odometry has been published for
+        # an instant AT OR AFTER the scan's timestamp, so with odometry every
+        # 0.27 s about half of all scans arrived "ahead" of it. SLAM Toolbox
+        # copes; AMCL did not -- it handled one scan after a pose was set and
+        # then published nothing, so map->odom went stale and Nav2 aborted every
+        # goal. Publishing at tf_rate_hz keeps the transform ahead of every scan.
+        self.declare_parameter('tf_rate_hz', 20.0)
+        # Between ticks the pose is predicted from the last measured speed. Cap
+        # how far ahead it may run: a rover that stops mid-interval is still
+        # "moving" in the last measurement, so the prediction overshoots by up to
+        # v * this (about 6 cm at 0.2 m/s) until the next tick corrects it.
+        self.declare_parameter('tf_extrapolate_s', 0.3)
+        # If ticks stop arriving (ESP32 gone), do NOT keep publishing a pose that
+        # looks fresh: stop after this long, as the transform always did when the
+        # ticks stopped, so consumers see it go stale.
+        self.declare_parameter('tf_stale_s', 1.0)
 
         self.R = self.get_parameter('wheel_radius').value
         self.L = self.get_parameter('wheel_separation').value
         self.CPR = self.get_parameter('encoder_cpr').value
         self.publish_tf = self.get_parameter('publish_tf').value
+        self.tf_rate = float(self.get_parameter('tf_rate_hz').value)
+        self.tf_extrapolate = float(self.get_parameter('tf_extrapolate_s').value)
+        self.tf_stale = float(self.get_parameter('tf_stale_s').value)
 
         # State variables
         self.x = 0.0
@@ -65,6 +101,10 @@ class RoverOdometry(Node):
         self.last_ticks_right = None
         self.last_time = self.get_clock().now()
         self.callback_count = 0
+        # Last measured pose time and speed, for the TF timer's prediction.
+        self.pose_time = None
+        self.v = 0.0
+        self.w = 0.0
 
         # Subscribers & Publishers
         self.sub_ticks = self.create_subscription(
@@ -75,6 +115,8 @@ class RoverOdometry(Node):
         # Accumulated (unwrapped) heading in degrees — for rotation calibration.
         self.pub_heading = self.create_publisher(Float64, '/heading_deg', 10)
         self.tf_broadcaster = TransformBroadcaster(self)
+        if self.publish_tf and self.tf_rate > 0:
+            self.create_timer(1.0 / self.tf_rate, self.publish_odom_tf)
 
         self.get_logger().info("Rover Odometry Node Started.")
         self.get_logger().info(f"Using CPR: {self.CPR}, Radius: {self.R}m, Separation: {self.L}m")
@@ -91,6 +133,7 @@ class RoverOdometry(Node):
             self.last_ticks_left = ticks_left
             self.last_ticks_right = ticks_right
             self.last_time = current_time
+            self.pose_time, self.v, self.w = current_time, 0.0, 0.0
             return
 
         # Calculate deltas
@@ -103,6 +146,7 @@ class RoverOdometry(Node):
             self.last_ticks_left = ticks_left
             self.last_ticks_right = ticks_right
             self.last_time = current_time
+            self.pose_time, self.v, self.w = current_time, 0.0, 0.0
             return
 
         self.last_ticks_left = ticks_left
@@ -133,6 +177,7 @@ class RoverOdometry(Node):
         self.x += d_s * math.cos(self.th + (d_th / 2.0))
         self.y += d_s * math.sin(self.th + (d_th / 2.0))
         self.th += d_th
+        self.pose_time, self.v, self.w = current_time, v, w
 
         # Publish Odometry
         odom = Odometry()
@@ -184,21 +229,6 @@ class RoverOdometry(Node):
         # Publish accumulated heading in degrees (unwrapped) for calibration
         self.pub_heading.publish(Float64(data=math.degrees(self.th)))
 
-        # Publish TF (unless disabled — under Nav2 the EKF owns this transform)
-        if self.publish_tf:
-            t = TransformStamped()
-            t.header.stamp = current_time.to_msg()
-            t.header.frame_id = 'odom'
-            t.child_frame_id = 'base_footprint'
-            t.transform.translation.x = self.x
-            t.transform.translation.y = self.y
-            t.transform.translation.z = 0.0
-            t.transform.rotation.x = q[0]
-            t.transform.rotation.y = q[1]
-            t.transform.rotation.z = q[2]
-            t.transform.rotation.w = q[3]
-            self.tf_broadcaster.sendTransform(t)
-
         # Publish Joint States (for Foxglove animation)
         js = JointState()
         js.header.stamp = current_time.to_msg()
@@ -217,6 +247,31 @@ class RoverOdometry(Node):
                 f"Deltas: dL={d_ticks_left:.1f}, dR={d_ticks_right:.1f} | "
                 f"Pose: x={self.x:.3f}, y={self.y:.3f}, th={self.th:.3f}"
             )
+
+    def publish_odom_tf(self):
+        """odom->base_footprint at tf_rate_hz: the last measured pose carried
+        forward at the last measured speed, stamped now."""
+        if self.pose_time is None:
+            return
+        now = self.get_clock().now()
+        age = (now - self.pose_time).nanoseconds / 1e9
+        if age > self.tf_stale:
+            return                      # no fresh odometry: let it go stale
+        x, y, th = extrapolate(self.x, self.y, self.th, self.v, self.w,
+                               min(max(age, 0.0), self.tf_extrapolate))
+        q = self.quaternion_from_euler(0, 0, th)
+        t = TransformStamped()
+        t.header.stamp = now.to_msg()
+        t.header.frame_id = 'odom'
+        t.child_frame_id = 'base_footprint'
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = 0.0
+        t.transform.rotation.x = q[0]
+        t.transform.rotation.y = q[1]
+        t.transform.rotation.z = q[2]
+        t.transform.rotation.w = q[3]
+        self.tf_broadcaster.sendTransform(t)
 
     def quaternion_from_euler(self, roll, pitch, yaw):
         cy = math.cos(yaw * 0.5)
