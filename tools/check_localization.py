@@ -32,7 +32,12 @@ class Checker(Node):
         self.grid = None
         self.buf = tf2_ros.Buffer()
         self.lis = tf2_ros.TransformListener(self.buf, self)
-        self.create_subscription(LaserScan, '/scan', self._scan, 10)
+        # Sensor QoS (best-effort). scan_filter publishes /scan best-effort, and a
+        # default RELIABLE subscription is incompatible with that: it connects,
+        # warns once, and then receives nothing -- "No /scan. Is the lidar up?"
+        # with the lidar up and publishing.
+        self.create_subscription(LaserScan, '/scan', self._scan,
+                                 rclpy.qos.qos_profile_sensor_data)
         # /map is latched (TRANSIENT_LOCAL) - a default subscription silently
         # receives nothing.
         self.create_subscription(
