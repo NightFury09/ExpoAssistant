@@ -73,7 +73,9 @@ def generate_launch_description():
     nav2_params_rewritten = RewrittenYaml(
         source_file=nav2_params_path,
         root_key='',
-        param_rewrites={'default_nav_to_pose_bt_xml': booth_bt_path},
+        param_rewrites={'default_nav_to_pose_bt_xml': booth_bt_path,
+                        # AMCL's input only; the costmaps name theirs `topic`.
+                        'scan_topic': LaunchConfiguration('amcl_scan_topic')},
         convert_types=True)
     rviz_config_path = os.path.join(my_robot_bringup_path, 'rviz',   'nav2_config.rviz')
     urdf_path        = os.path.join(rover_description_path, 'urdf',   'rover.urdf')
@@ -92,6 +94,20 @@ def generate_launch_description():
     # Its depth feeds the LOCAL costmap's voxel_layer only -- mid/far-field and
     # tall obstacles. The lidar stays the near-field sensor; see the geometry
     # note at the top of realsense.launch.py for why.
+    # Passed to Nav2's container as `--log-level`. A bare level ('debug') turns
+    # EVERYTHING up; `amcl:=debug` turns up one node only, which is what you want
+    # when chasing a localisation fault:
+    #   ros2 launch ... master_navigation.launch.py log_level:=amcl:=debug
+    declare_log_level_cmd = DeclareLaunchArgument(
+        'log_level', default_value='info',
+        description="Nav2 log level, or 'node:=level' for a single node")
+
+    # Which scan topic AMCL reads. /scan normally; a test can point it at a
+    # relayed copy to see whether AMCL's scan/transform filter is the problem.
+    declare_amcl_scan_cmd = DeclareLaunchArgument(
+        'amcl_scan_topic', default_value='/scan',
+        description='Scan topic AMCL subscribes to')
+
     declare_use_camera_cmd = DeclareLaunchArgument(
         'use_camera', default_value='false',
         description='Also bring up the RealSense D455 for 3D obstacles')
@@ -190,6 +206,7 @@ def generate_launch_description():
             'map':          LaunchConfiguration('map'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
             'params_file':  nav2_params_rewritten,
+            'log_level':    LaunchConfiguration('log_level'),
         }.items())
 
     # Foxglove bridge instead of RViz — this is a headless Jetson (SSH from a
@@ -218,6 +235,8 @@ def generate_launch_description():
     return LaunchDescription([
         declare_use_sim_time_cmd,
         declare_map_cmd,
+        declare_log_level_cmd,
+        declare_amcl_scan_cmd,
         declare_use_camera_cmd,
         declare_use_dashboard_cmd,
         esp32_reset_action,           # reset ESP32
