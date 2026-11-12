@@ -23,6 +23,12 @@ if [ "$MODE" = "--no-autostart" ]; then
     echo "Removed $AUTOSTART -- the app no longer opens at login."
     exit 0
 fi
+if [ "$MODE" = "--remove" ]; then
+    rm -f "$AUTOSTART" "$ENTRY" "$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")/rover-console.desktop"
+    update-desktop-database "$APPS" 2>/dev/null || true
+    echo "Removed the menu entry, desktop icon and autostart."
+    exit 0
+fi
 
 /usr/bin/python3 -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.0')" 2>/dev/null || {
     echo "GTK 3 / WebKit2GTK 4.0 Python bindings are missing:"
@@ -54,8 +60,19 @@ EOF
 command -v desktop-file-validate >/dev/null && desktop-file-validate "$ENTRY"
 command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" 2>/dev/null || true
 
+# A copy on the desktop. GNOME only runs a launcher from the desktop if it is
+# executable AND marked trusted -- otherwise double-clicking asks to "Allow
+# Launching", or opens it as a text file.
+DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
+if [ -d "$DESKTOP_DIR" ]; then
+    cp "$ENTRY" "$DESKTOP_DIR/rover-console.desktop"
+    chmod +x "$DESKTOP_DIR/rover-console.desktop"
+    gio set "$DESKTOP_DIR/rover-console.desktop" metadata::trusted true 2>/dev/null || true
+    echo "Desktop icon: $DESKTOP_DIR/rover-console.desktop"
+fi
+
 echo "Installed: $ENTRY"
-echo "Open it:   Activities -> \"Rover Console\""
+echo "Open it:   the desktop icon, or Activities -> \"Rover Console\""
 echo "  or run:  $HERE/rover_app.py [--fullscreen]"
 
 if [ "$MODE" = "--autostart" ]; then

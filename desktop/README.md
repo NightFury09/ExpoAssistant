@@ -1,8 +1,8 @@
 # Rover Console app
 
 The rover console on the rover's own screen, in its own window, with **no
-network needed** — no Wi-Fi, no router, no second device. Optionally opens full
-screen every time the rover boots.
+network needed** — no Wi-Fi, no router, no second device. Opens from a desktop
+icon; it can optionally open full screen at every login (not enabled now).
 
 It is the same console page you get in a browser at `http://<rover-ip>:8080`,
 so everything in [CONSOLE.md](../CONSOLE.md) applies unchanged.
@@ -11,7 +11,7 @@ so everything in [CONSOLE.md](../CONSOLE.md) applies unchanged.
 
 ## Use it
 
-**Activities → "Rover Console"**. Right-click it for **Open full screen**, or
+The **Rover Console** icon on the desktop, or **Activities → "Rover Console"**. Right-click it for **Open full screen**, or
 **Add to Favourites** to pin it to the dock.
 
 From a terminal on the rover:
@@ -43,7 +43,10 @@ as when a browser tab is closed.
 
 ---
 
-## Open it full screen at boot
+## Optional: open it full screen at boot
+
+> **Not enabled on this rover.** It opens from the desktop icon; nothing starts
+> by itself. Everything below is only for turning that on.
 
 Three things have to happen after power-on, each set up separately:
 
@@ -191,9 +194,10 @@ failure.
 | file | what it is |
 |---|---|
 | [`rover_app.py`](rover_app.py) | the app — window, web view, startup and retry, keys |
-| [`install.sh`](install.sh) | writes the menu launcher; `--autostart` / `--no-autostart` for login |
+| [`install.sh`](install.sh) | writes the desktop icon and menu launcher; `--autostart` / `--no-autostart` for login; `--remove` takes it all away |
 | [`rover.svg`](rover.svg) | the icon |
 | `~/.local/share/applications/rover-console.desktop` | menu launcher (written by install.sh) |
+| `~/Desktop/rover-console.desktop` | the desktop icon (executable and marked trusted) |
 | `~/.config/autostart/rover-console.desktop` | login autostart (written by `--autostart`) |
 
 ---

@@ -7,8 +7,11 @@
 # without it. `loginctl enable-linger` is what makes a user service start at
 # boot with nobody logged in.
 #
-#   ./install.sh            user service, no sudo   <- what you want
-#   ./install.sh --system   system-wide, needs sudo
+#   ./install.sh              user service, starts at boot, no sudo
+#   ./install.sh --on-demand  user service, NOT started at boot: the Rover
+#                             Console app (or `systemctl --user start
+#                             rover-console`) starts it when wanted
+#   ./install.sh --system     system-wide, needs sudo
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MODE=${1:-}
@@ -51,7 +54,11 @@ else
 fi
 
 $SC daemon-reload
-$SC enable rover-console.service
+if [ "$MODE" = "--on-demand" ]; then
+    $SC disable rover-console.service 2>/dev/null || true   # keep it out of boot
+else
+    $SC enable rover-console.service
+fi
 $SC restart rover-console.service
 
 echo "waiting for the console to bind :8080 ..."
