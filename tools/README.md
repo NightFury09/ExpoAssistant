@@ -20,6 +20,8 @@ source ~/AGX_Orin_Backup/rover_project/ros2_ws/install/setup.bash
 | `find_goal.py` | Where can I safely send the robot? |
 | `send_goal.py` | Send it there |
 | `save_waypoint.py` | Record the current pose as a named demo station |
+| `test_roam_with_fake_nav2.py` | Does free roam start, roam, and stop for every safety rule? Runs the real console against a fake Nav2; **no rover needed**, about 2 minutes |
+| `rover_client.py roam on\|off` | Free roam from another program or a terminal |
 
 ---
 

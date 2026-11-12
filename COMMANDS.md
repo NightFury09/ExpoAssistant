@@ -5,12 +5,12 @@ The console at **http://192.168.3.224:8080** starts and stops the stacks, drives
 the rover, builds and loads maps, marks demo points and sends goals. See
 `CONSOLE.md`.
 
-On the rover's own screen, open **Rover Console** from the app menu instead:
-the same console in its own window, loaded over loopback, so it works with
-Wi-Fi off. Install the launcher once with `desktop/install.sh`, or
-`desktop/install.sh --autostart` to open it full screen at every login. If the
-service is down, the app starts it. F11 toggles full screen. Boot setup and how
-it works: `desktop/README.md`.
+On the rover's own screen, double-click the **Rover Console** icon on the
+desktop instead: the same console in its own window, loaded over loopback, so it
+works with Wi-Fi off. Install the icon once with `desktop/install.sh`. If the
+service is down, the app starts it. F11 toggles full screen. It does not open at
+login unless you ask: `desktop/install.sh --autostart`. How it works:
+`desktop/README.md`.
 
 This file is for the rest: managing the service, diagnosing a problem, and the
 few things that have no button.
@@ -25,7 +25,9 @@ few things that have no button.
 
 ## 1. The service — the only thing that must be running
 
-It starts at boot. Note the **`--user`**: without it systemctl looks for a
+It does **not** start at boot on this rover: the **Rover Console** desktop icon
+starts it, or `systemctl --user start rover-console`. (`systemctl --user enable
+rover-console` makes it start at boot.) Note the **`--user`**: without it systemctl looks for a
 system-wide unit that does not exist and says "could not be found".
 
 ```bash
@@ -188,6 +190,12 @@ python3 tools/rover_client.py cancel
 ```bash
 python3 tools/rover_client.py estop on
 ```
+```bash
+python3 tools/rover_client.py roam on
+```
+(`roam off` to stop. Free roam: the rover drives itself around the loaded map. It
+needs Navigation mode and a localised rover, and ends the moment a person sends
+a goal, presses a drive key, cancels or hits the e-stop. See `CONSOLE.md`.)
 
 `ready` exits 0 when it is safe to offer somebody a walk, non-zero otherwise
 with the reason. In Python: `from rover_client import Rover`.

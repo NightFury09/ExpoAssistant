@@ -149,6 +149,23 @@ class Rover:
         self._call('/api/estop', {'on': bool(on)})
         return True
 
+    def roam(self, on=True):
+        """Free roam: drive itself between spots on the loaded map until stopped.
+
+        Needs Navigation mode and a localised rover (the same as ready(), minus
+        the demo points). Raises RoverError with the reason if it will not start.
+        Sending go() or cancel() while it roams ends the roam -- a request from
+        a person always wins.
+        """
+        r = self._call('/api/roam', {'on': bool(on)})
+        if not r.get('ok'):
+            raise RoverError(r.get('err') or 'free roam would not start')
+        return True
+
+    def roaming(self):
+        """True while free roam is running."""
+        return bool(self.status().get('roaming'))
+
     # ---- waiting -----------------------------------------------------
     def nav_state(self):
         return self.status().get('nav', {}).get('state', 'idle')
@@ -202,6 +219,8 @@ def _main(argv):
     g.add_argument('--wait', action='store_true', help='block until it arrives')
     e = sub.add_parser('estop', help='halt everything')
     e.add_argument('state', choices=['on', 'off'])
+    f = sub.add_parser('roam', help='free roam: wander the loaded map on its own')
+    f.add_argument('state', choices=['on', 'off'])
     a = ap.parse_args(argv)
 
     r = Rover(a.url)
@@ -220,6 +239,8 @@ def _main(argv):
             r.cancel(); print('cancelled')
         elif a.cmd == 'estop':
             r.estop(a.state == 'on'); print(f'e-stop {a.state}')
+        elif a.cmd == 'roam':
+            r.roam(a.state == 'on'); print(f'free roam {a.state}')
         elif a.cmd == 'go':
             why = r.why_not_ready()
             if why:

@@ -73,8 +73,9 @@ The console runs as a service from boot, so there is nothing to start.
 2. **MAP** tab → pick the map → **NAVIGATE**.
 3. **SET POSE**: drag from where the rover really is, in the direction it
    faces, until the scan lines up with the walls.
-4. Press **GO** next to a demo station.
-5. To stop: **Esc**, or **EMERGENCY STOP**.
+4. Press **GO** next to a demo station, or **START FREE ROAM** to let it wander
+   the map on its own (see [CONSOLE.md](CONSOLE.md#free-roam)).
+5. To stop: **Esc**, or **EMERGENCY STOP**. Both end free roam too.
 
 **If the rover moves oddly, check the drivetrain first.** Run:
 
@@ -179,24 +180,29 @@ board or the lidar's USB adapter, read the new serial number and edit the rule:
 udevadm info -a -n /dev/ttyUSB0 | grep -m1 '{serial}'
 ```
 
-### 6. Start the console at boot
+### 6. Install the console service
 
 ```bash
-~/AGX_Orin_Backup/rover_project/systemd/install.sh
+~/AGX_Orin_Backup/rover_project/systemd/install.sh --on-demand
 ```
 
-The console then runs at **http://\<rover-ip\>:8080**, starting at power-on even
-with nobody logged in.
+This installs the console service **without** starting it at boot. It runs at
+**http://\<rover-ip\>:8080** once something starts it, which the app in step 7
+does when it opens. Leave off `--on-demand` to have it start at power-on instead,
+even with nobody logged in. Either way you can start it by hand:
+`systemctl --user start rover-console`.
 
-### 7. Optional: the console on the rover's own screen
+### 7. The console on the rover's own screen
 
 ```bash
-~/AGX_Orin_Backup/rover_project/desktop/install.sh --autostart
+~/AGX_Orin_Backup/rover_project/desktop/install.sh
 ```
 
-This opens the console full screen at login. To have it appear at boot with no
-keyboard, also turn on **Settings → Users → Automatic Login**.
-[desktop/README.md](desktop/README.md) explains the trade-off.
+This adds a **Rover Console** icon to the desktop and the app menu. Double-click
+it to open the console, starting the service if needed. Nothing opens by itself.
+To have it open full screen at every login instead, run
+`desktop/install.sh --autostart`; [desktop/README.md](desktop/README.md)
+explains that and automatic login.
 
 ### 8. Check it
 

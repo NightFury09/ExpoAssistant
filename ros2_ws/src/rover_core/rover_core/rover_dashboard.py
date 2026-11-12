@@ -42,6 +42,7 @@ from slam_toolbox.srv import SerializePoseGraph
 from std_msgs.msg import String
 
 from rover_core.stack_supervisor import StackSupervisor, STACKS
+from rover_core import roam as roam_planner
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from sensor_msgs.msg import Image, LaserScan, PointCloud2
 
@@ -192,6 +193,7 @@ class Dash(Node):
         self.map_seq = 0            # bumps on every new map, so the UI can cache
         self.map_name = ''          # which map the waypoints belong to
         self.map_pose = None        # robot in the MAP frame (x, y, yaw deg)
+        self.map_pose_at = 0.0      # stamp of that transform: how fresh it is
         self.plan = []              # current Nav2 path, decimated
         self.cloud = []             # depth obstacles, (x, y) in the MAP frame
         self.cloud_at = 0.0         # when it was last refreshed
@@ -211,6 +213,20 @@ class Dash(Node):
                     'result': None, 'since': 0.0, 'place': None}
         self.nav_handle = None
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+
+        # --- free roam: see the block of roam_* methods further down ---
+        self.declare_parameter('roam_clearance_m', 0.5)     # min room around a goal
+        self.declare_parameter('roam_dwell_s', 3.0)         # pause at each spot
+        self.declare_parameter('roam_goal_timeout_s', 120.0)
+        self.declare_parameter('roam_max_fails', 4)         # in a row, then give up
+        self.roam_clearance = float(self.get_parameter('roam_clearance_m').value)
+        self.roam_dwell = float(self.get_parameter('roam_dwell_s').value)
+        self.roam_goal_timeout = float(self.get_parameter('roam_goal_timeout_s').value)
+        self.roam_max_fails = int(self.get_parameter('roam_max_fails').value)
+        self.roam = {'on': False, 'phase': 'off', 'goals': 0, 'fails': 0,
+                     'msg': '', 'target': None, 'dwell_until': 0.0,
+                     'sent_at': 0.0, 'drive_since': 0.0, 'lost_since': None}
+        self.roam_recent = []       # last few goals, so it covers the room
         # Cancelling through the goal handle only works for goals THIS console
         # sent. A goal published to /goal_pose, or sent from Foxglove, leaves us
         # with no handle at all -- and that is exactly when you most want a stop
@@ -221,6 +237,7 @@ class Dash(Node):
         self.pose_pub = self.create_publisher(
             PoseWithCovarianceStamped, '/initialpose', 10)
         self.create_timer(0.2, self.tick_nav)
+        self.create_timer(0.5, self.tick_roam)
 
         # --- demo waypoints ---
         # Coordinates are only meaningful against one map, so the file records
@@ -249,6 +266,12 @@ class Dash(Node):
         self.port = int(self.get_parameter('port').value)
         self.declare_parameter('map_dir', DEFAULT_MAP_DIR)
         self.map_dir = self.get_parameter('map_dir').value
+        # maps/ is gitignored, so a fresh clone has none; without it every map
+        # listing failed and logged "No such file or directory" -- 630 times.
+        try:
+            os.makedirs(self.map_dir, exist_ok=True)
+        except OSError as e:
+            self.get_logger().warn(f'cannot create map dir {self.map_dir}: {e}')
         self.graph_nodes = []
         self._maps, self._maps_at = [], 0.0
         self.sup = StackSupervisor(lambda: list(self.graph_nodes),
@@ -646,6 +669,196 @@ class Dash(Node):
         self._set_nav(name[0], result=name[1], remaining=None)
         self.get_logger().info(f"goal finished: {name[1]}")
 
+    # ---------------- free roam ----------------
+    # The rover drives itself from spot to spot on the loaded map until told to
+    # stop. It is NOT a new way of driving: each spot goes out as an ordinary
+    # navigate_to_pose goal through nav_req, so Nav2 still plans, avoids people
+    # and furniture, and recovers -- and every existing stop (Esc, CANCEL GOAL,
+    # EMERGENCY STOP, a key press) ends it the way it ends any goal. What this
+    # adds is the rule for when roaming must NOT carry on, checked every tick.
+    ROAM_BUSY = ('sending', 'active', 'cancelling')
+
+    def _roam_view(self, now):
+        """What the page shows. Caller holds self.lock."""
+        r = self.roam
+        if not r['on']:
+            phase = 'off'
+        elif r['phase'] in ('launch', 'drive'):
+            phase = 'driving'
+        else:
+            phase = 'pausing' if now < r['dwell_until'] else 'planning'
+        return {'on': r['on'], 'phase': phase, 'goals': r['goals'],
+                'fails': r['fails'], 'msg': r['msg'], 'target': r['target']}
+
+    def _roam_sensors_stale(self, now):
+        with self.lock:
+            ss, dg = self.scan_stats, self.diag
+        # Blind or deaf means no roaming: with the lidar silent Nav2's costmap
+        # goes stale and the rover drives on a picture of a room that has moved.
+        if ss is None or now - ss[1] > 3.0:
+            return 'the lidar stopped publishing'
+        if dg is None or now - dg[1] > 3.0:
+            return 'the ESP32 stopped reporting'
+        return None
+
+    def _roam_unsafe(self, now):
+        """Why roaming must stop right now, or None. Runs every tick."""
+        with self.lock:
+            estop, mode, pose = self.estop, self.mode, self.map_pose
+            pose_at = self.map_pose_at
+            lost = self.roam['lost_since']
+        if estop:
+            return 'the e-stop was pressed'
+        if mode == 'manual':
+            return 'someone took over with the keyboard'
+        state = self.sup.status()['state']
+        if state != 'navigation':
+            return f'the stack is {state}, not navigation'
+        why = self._roam_sensors_stale(now)
+        if why:
+            return why
+        # A few seconds without a map->base transform is normal while AMCL
+        # re-converges; a long one means it no longer knows where it is. The
+        # lookup always takes the LATEST transform, so a dead AMCL leaves the
+        # last pose looking present for ever -- hence the age check as well.
+        no_fix = pose is None or now - pose_at > 3.0
+        with self.lock:
+            if no_fix:
+                self.roam['lost_since'] = lost or now
+                if now - (lost or now) > 3.0:
+                    return 'the rover lost its position on the map'
+            else:
+                self.roam['lost_since'] = None
+        return None
+
+    def roam_start(self):
+        """Begin roaming. Returns (ok, message). Runs on the HTTP thread, so it
+        only checks and sets flags; goals are sent from tick_roam."""
+        now = time.time()
+        with self.lock:
+            if self.roam['on']:
+                return True, 'already roaming'
+            estop, pose, grid = self.estop, self.map_pose, self.map_grid
+            pose_at = self.map_pose_at
+            busy = self.nav['state'] in self.ROAM_BUSY
+        if estop:
+            return False, 'the e-stop is engaged'
+        state = self.sup.status()['state']
+        if state != 'navigation':
+            return False, 'Free roam needs Navigation mode: load a map first'
+        if grid is None:
+            return False, 'no map is loaded yet'
+        if pose is None or now - pose_at > 3.0:
+            return False, 'the rover is not localised: set its pose on the map first'
+        if busy:
+            return False, 'a goal is already running: cancel it first'
+        why = self._roam_sensors_stale(now)
+        if why:
+            return False, why
+        with self.lock:
+            self.roam.update(on=True, phase='pick', goals=0, fails=0, msg='',
+                             target=None, dwell_until=0.0, sent_at=0.0,
+                             drive_since=0.0, lost_since=None)
+            self.roam_recent = []
+        self.get_logger().info('free roam ON')
+        return True, 'roaming'
+
+    def roam_stop(self, reason, cancel=True):
+        """Stop roaming. cancel=False when the caller is about to set a goal of
+        its own -- cancelling here would race it and kill the operator's goal."""
+        with self.lock:
+            if not self.roam['on']:
+                return False
+            was_launch = self.roam['phase'] == 'launch'
+            self.roam.update(on=False, phase='off', msg=reason, target=None)
+            if cancel:
+                if was_launch:
+                    # A goal of ours may still be waiting to be sent; tick_nav
+                    # would send it AFTER processing the cancel.
+                    self.nav_req = None
+                if was_launch or self.nav['state'] in ('sending', 'active'):
+                    self.nav_cancel_req = True
+        self.get_logger().info(f'free roam OFF: {reason}')
+        return True
+
+    def _roam_fail(self, msg):
+        with self.lock:
+            r = self.roam
+            r['fails'] += 1
+            fails = r['fails']
+            r.update(phase='pick', dwell_until=time.time() + 2.0,
+                     target=None, msg=msg)
+        self.get_logger().warn(
+            f'free roam: {msg} ({fails}/{self.roam_max_fails} in a row)')
+        if fails >= self.roam_max_fails:
+            self.roam_stop(f'gave up after {fails} failed goals in a row; '
+                           f'last: {msg}', cancel=False)
+
+    def tick_roam(self):
+        with self.lock:
+            if not self.roam['on']:
+                return
+        now = time.time()
+        why = self._roam_unsafe(now)
+        if why:
+            self.roam_stop(why)
+            return
+        with self.lock:
+            r = dict(self.roam)
+            nav = dict(self.nav)
+            pose = dict(self.map_pose) if self.map_pose else None
+            grid, meta = self.map_grid, self.map_meta
+            recent = list(self.roam_recent)
+
+        if r['phase'] == 'pick':
+            # Wait out the pause at the last spot, and any goal still winding down.
+            if now < r['dwell_until'] or nav['state'] in self.ROAM_BUSY:
+                return
+            if pose is None or grid is None:
+                return
+            goal, why = roam_planner.pick_goal(
+                grid, meta, (pose['x'], pose['y']), recent,
+                clearance_m=self.roam_clearance)
+            if goal is None:
+                self._roam_fail(f'nowhere to go: {why}')
+                return
+            with self.lock:
+                self.nav_req = dict(goal)
+                self.roam.update(phase='launch', sent_at=now, msg='',
+                                 target=[goal['x'], goal['y']])
+                self.roam_recent = (self.roam_recent
+                                    + [(goal['x'], goal['y'])])[-6:]
+            return
+
+        if r['phase'] == 'launch':
+            # nav still shows the PREVIOUS goal's result until tick_nav picks the
+            # request up; reading that as ours would score a stale "arrived".
+            if nav['since'] < r['sent_at']:
+                if now - r['sent_at'] > 3.0:
+                    self._roam_fail('the goal was never sent')
+                return
+            with self.lock:
+                self.roam.update(phase='drive', drive_since=now)
+            r['drive_since'] = now
+
+        state = nav['state']
+        if state in self.ROAM_BUSY:
+            if now - r['drive_since'] > self.roam_goal_timeout:
+                with self.lock:
+                    self.nav_cancel_req = True
+                self._roam_fail('a goal took too long, so it was cancelled')
+            return
+        if state == 'arrived':
+            with self.lock:
+                self.roam.update(phase='pick', goals=r['goals'] + 1, fails=0,
+                                 dwell_until=now + self.roam_dwell, target=None)
+            self.get_logger().info(f"free roam: reached stop {r['goals'] + 1}")
+        elif state in ('aborted', 'failed', 'rejected', 'no server'):
+            self._roam_fail(f"Nav2: {nav.get('result') or state}")
+        else:
+            # idle: somebody cancelled the goal, so they want it to stop.
+            self.roam_stop('the goal was cancelled', cancel=False)
+
     def set_initial_pose(self, x, y, yaw_deg):
         m = PoseWithCovarianceStamped()
         m.header.frame_id = 'map'
@@ -813,10 +1026,12 @@ class Dash(Node):
         q = t.transform.rotation
         yaw = math.degrees(math.atan2(2 * (q.w * q.z + q.x * q.y),
                                       1 - 2 * (q.y * q.y + q.z * q.z)))
+        st = t.header.stamp
         with self.lock:
             self.map_pose = {'x': round(t.transform.translation.x, 3),
                              'y': round(t.transform.translation.y, 3),
                              'yaw': round(yaw, 1)}
+            self.map_pose_at = st.sec + st.nanosec * 1e-9
 
     # ---- depth views -------------------------------------------------
     def _want(self, view):
@@ -1027,6 +1242,7 @@ class Dash(Node):
                         'ready': self.map_png is not None},
                 'map_pose': self.map_pose,
                 'nav': dict(self.nav),
+                'roam': self._roam_view(now),
                 'build': BUILD,
                 'stack': self.sup.status(),
                 'cam_proc': self.sup.camera_status(),
@@ -1489,6 +1705,12 @@ running across a mode change">CAMERA</button>
           <button id="usemap" style="flex:1;border-color:var(--acc);color:var(--acc)">
             USE THIS MAP &amp; NAVIGATE</button>
         </div>
+        <div class="mrow" id="row-roam" hidden>
+          <button id="roamtog" style="flex:1" title="The rover drives itself
+between spots on the loaded map until stopped. Esc, CANCEL GOAL or EMERGENCY
+STOP end it.">START FREE ROAM</button>
+        </div>
+        <div class="stnote" id="roamnote" hidden></div>
         <div class="stnote" id="stnote">—</div>
       </div>
     </div>
@@ -2034,6 +2256,7 @@ function mapSync(){                       // called from poll()
       `${(mi.meta.w*mi.meta.res).toFixed(1)} × ${(mi.meta.h*mi.meta.res).toFixed(1)} m `+
       `· ${mi.meta.res.toFixed(2)} m/cell`;}
   if(M.stack){ST=M.stack; stRender(M.stack,M.maps||[],M.save,M.cam_proc);}
+  roamRender(M);
   if(M.waypoints&&JSON.stringify(M.waypoints)!==JSON.stringify(WP)){
     WP=M.waypoints; wpRender();}
   const nv=M.nav||{state:'idle'};
@@ -2193,6 +2416,45 @@ function stRender(st,maps,save,cam){
     'to survey a new one.':'Pick a map and press NAVIGATE, or MAP ROOM to survey a new one.';
   n.className='stnote '+cls; n.innerHTML=txt;
 }
+
+/* ---- free roam ----
+   The server owns every rule for when roaming must stop; the page only shows
+   its state and sends start/stop. Shown in navigation mode only, so it is not
+   on screen when it cannot work. */
+function roamRender(m){
+  const r=m.roam||{on:false,phase:'off'};
+  const nav=m.stack&&m.stack.state==='navigation';
+  $('#row-roam').hidden=!(nav||r.on);
+  const b=$('#roamtog');
+  b.classList.toggle('on',!!r.on);
+  b.textContent=r.on?'STOP FREE ROAM':'START FREE ROAM';
+  const n=$('#roamnote');
+  let txt='';
+  if(r.on){
+    const left=m.nav&&m.nav.remaining;
+    txt=r.phase==='driving'
+      ? 'Roaming · <b>'+r.goals+'</b> stops so far · heading to <b>'+
+        (r.target?f(r.target[0])+', '+f(r.target[1]):'…')+'</b>'+
+        (left!=null?' · '+f(left)+' m to go':'')
+      : r.phase==='pausing' ? 'Roaming · <b>'+r.goals+'</b> stops · pausing…'
+      : 'Roaming · <b>'+r.goals+'</b> stops · choosing the next spot…';
+    if(r.fails)txt+=' · <span style="color:var(--warn)">'+r.fails+' failed in a row</span>';
+  }else if(r.msg){
+    txt='Free roam stopped: '+esc(r.msg)+'.';
+  }
+  n.hidden=!txt; n.innerHTML=txt;
+}
+$('#roamtog').onclick=async()=>{
+  const on=!(M&&M.roam&&M.roam.on);
+  if(on&&!confirm('Start free roam?\n\nThe rover will drive around the map on its '+
+     'own, avoiding obstacles, and keep going until stopped.\n\nKeep the area '+
+     'clear and stay close. Esc, CANCEL GOAL or EMERGENCY STOP end it, and so '+
+     'does touching the keyboard controls.'))return;
+  const r=await fetch('/api/roam',{method:'POST',body:JSON.stringify({on:on})});
+  const j=await r.json();
+  if(!j.ok){const n=$('#roamnote');n.hidden=false;
+    n.innerHTML='<span style="color:var(--bad)">Cannot start: '+esc(j.err||'failed')+'.</span>';}
+};
 
 async function setMode(mode,mapPath){
   const body={mode:mode};
@@ -2453,6 +2715,7 @@ class Handler(BaseHTTPRequestHandler):
                 localised = NODE.map_pose is not None
                 pose = dict(NODE.map_pose) if NODE.map_pose else None
                 estop = NODE.estop
+                roaming = NODE.roam['on']
             stack = NODE.sup.status()
             # One flag worth trusting: is it safe to offer someone a walk to a
             # demo station right now? Anything less and the assistant has to
@@ -2470,6 +2733,7 @@ class Handler(BaseHTTPRequestHandler):
                 'localised': localised,
                 'pose': pose,
                 'estop': estop,
+                'roaming': roaming,
                 'nav': {'state': nav['state'], 'place': nav.get('place'),
                         'remaining': nav['remaining'],
                         'result': nav['result']},
@@ -2526,6 +2790,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             body = {}
         if self.path == '/api/cmd':
+            if body.get('lin') or body.get('ang'):
+                NODE.roam_stop('someone took over with the keyboard')
             NODE.set_cmd(body.get('lin', 0.0), body.get('ang', 0.0))
             self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/depth_range':
@@ -2543,15 +2809,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(409, 'application/json',
                            b'{"ok":false,"err":"e-stop engaged"}')
             else:
+                NODE.roam_stop('a goal was set by hand', cancel=False)
                 with NODE.lock:
                     NODE.nav_req = {'x': float(body['x']), 'y': float(body['y']),
                                     'yaw': float(body.get('yaw', 0.0))}
                 self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/nav_cancel':
+            NODE.roam_stop('the goal was cancelled', cancel=False)
             with NODE.lock:
                 NODE.nav_cancel_req = True
             self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/initialpose':
+            NODE.roam_stop('the pose was reset by hand')
             NODE.set_initial_pose(float(body['x']), float(body['y']),
                                   float(body.get('yaw', 0.0)))
             self._send(200, 'application/json', b'{"ok":true}')
@@ -2595,6 +2864,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, 'application/json',
                            b'{"ok":false,"err":"no such waypoint"}')
             else:
+                NODE.roam_stop('the pose was reset by hand')
                 NODE.set_initial_pose(pt['x'], pt['y'], pt['yaw'])
                 self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/wp/goto':
@@ -2607,10 +2877,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(409, 'application/json',
                            b'{"ok":false,"err":"e-stop engaged"}')
             else:
+                NODE.roam_stop('a station was chosen by hand', cancel=False)
                 with NODE.lock:
                     NODE.nav_req = dict(pt, place=NODE.clean_name(body['name']))
                 self._send(200, 'application/json', b'{"ok":true}')
         elif self.path == '/api/mode':
+            NODE.roam_stop('the stack is being changed')
             want = str(body.get('mode', 'idle'))
             if want == 'idle':
                 ok, msg = NODE.sup.stop()
@@ -2637,7 +2909,17 @@ class Handler(BaseHTTPRequestHandler):
                        json.dumps({'ok': not busy,
                                    'err': 'a save is already running'
                                           if busy else None}).encode())
+        elif self.path == '/api/roam':
+            if body.get('on'):
+                ok, msg = NODE.roam_start()
+            else:
+                NODE.roam_stop('stopped from the console')
+                ok, msg = True, 'stopped'
+            self._send(200 if ok else 409, 'application/json',
+                       json.dumps({'ok': ok, 'err': None if ok else msg}).encode())
         elif self.path == '/api/estop':
+            if body.get('on', True):
+                NODE.roam_stop('the e-stop was pressed')
             with NODE.lock:
                 NODE.estop = bool(body.get('on', True))
                 if NODE.estop:

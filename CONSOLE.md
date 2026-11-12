@@ -29,7 +29,8 @@ plan, and the saved demo points. Press **M** to flip between tabs.
 
 ## Normal expo day
 
-1. Power up. The console is already running (systemd starts it at boot).
+1. Power up and double-click the **Rover Console** icon on the desktop. It starts
+   the console if it is not running (it does not start by itself at boot).
 2. Open the page, go to **MAP**.
 3. Pick the map in the dropdown, press **NAVIGATE**. Wait for the mode chip to
    read `NAVIGATION · 4/4 nodes`.
@@ -49,6 +50,48 @@ Cancel works on *any* goal, including one sent from Foxglove or published
 straight to `/goal_pose`. It goes to the action server's own cancel service
 rather than through a goal handle the console only has for its own goals, and
 it reports how many goals it actually stopped.
+
+## Free roam
+
+**START FREE ROAM** (MAP tab, under the mode buttons; shown in Navigation mode
+only) makes the rover drive itself around the loaded map until you stop it. It
+picks a spot, drives there, pauses about 3 s, picks another, and so on.
+
+Before you start it: the map must be loaded, and the rover **localised** (pose
+set, scan lined up with the walls) — the same preparation as sending a goal.
+The page asks for confirmation first. Stay close, and keep the area clear.
+
+How it works: each spot is an ordinary Nav2 goal, so the rover plans, steers
+around people and furniture and recovers exactly as it does for **GO**. Spots
+are chosen on the map only where there is plenty of room around them (0.5 m of
+clear floor), in the part of the floor the rover can actually reach, a real
+drive away, and away from the last few places it visited, so it covers the room
+instead of shuffling between two corners.
+
+**It stops itself** — and cancels the goal in progress — when:
+
+| what happened | shown as |
+|---|---|
+| **Esc**, **CANCEL GOAL**, **CANCEL NAV** or **STOP FREE ROAM** | the goal was cancelled / stopped from the console |
+| **EMERGENCY STOP** | the e-stop was pressed |
+| a drive key (**WASD**) is pressed | someone took over with the keyboard |
+| you set a goal, press **GO**, or set the pose | a goal was set by hand / the pose was reset by hand |
+| the stack changes mode or stops | the stack is … not navigation |
+| the lidar stops publishing for 3 s | the lidar stopped publishing |
+| the ESP32 stops reporting for 3 s | the ESP32 stopped reporting |
+| the map position is missing or stale for about 6 s | the rover lost its position on the map |
+| 4 goals in a row fail | gave up after 4 failed goals in a row |
+| a single goal takes over 2 minutes | that goal is cancelled and counted as a failure |
+
+The reason stays on the panel after it stops. A person's request always wins:
+sending a goal while it roams ends the roam and the rover goes where you said.
+
+Speed is whatever Nav2 is set to (`desired_linear_vel` in `nav2_params.yaml`);
+roaming adds no speed of its own. The pause, clearance and give-up limits are
+the console's `roam_dwell_s`, `roam_clearance_m` and `roam_max_fails` parameters.
+
+From another program: `rover.roam(True)` / `rover.roam(False)` in
+`rover_client.py`, or `python3 tools/rover_client.py roam on`.
 
 ## Mapping a new room
 
@@ -219,11 +262,13 @@ up, that file has the reason.
 
 ## Autostart
 
-**Installed and running.** The console comes up on boot with nobody logged in,
-and no terminal is involved.
+**Installed, but set to start on demand, not at boot.** The **Rover Console**
+desktop icon starts it, or `systemctl --user start rover-console`. To bring it
+up at every power-on instead, with nobody logged in, enable it (below).
 
 ```bash
-~/AGX_Orin_Backup/rover_project/systemd/install.sh      # re-run to upgrade it
+~/AGX_Orin_Backup/rover_project/systemd/install.sh --on-demand   # install, not at boot
+~/AGX_Orin_Backup/rover_project/systemd/install.sh               # install, starts at boot
 ```
 
 It is a **user** service, so none of these need `sudo`:
@@ -233,7 +278,8 @@ systemctl --user status rover-console
 systemctl --user restart rover-console     # after a code change
 systemctl --user stop rover-console        # console AND the stacks it launched
 systemctl --user start rover-console
-systemctl --user disable rover-console     # stop it starting at boot
+systemctl --user disable rover-console     # stop it starting at boot (the current setup)
+systemctl --user enable rover-console      # start it at every boot
 ```
 
 Note the `--user`. Without it systemctl looks for a system-wide unit that does
@@ -364,7 +410,8 @@ The API underneath, if you would rather call it directly:
 | POST | `/api/mode` | `{"mode":"navigation","map":"/path.yaml","switch":true}` | change mode; `switch` stops the running stack first |
 | POST | `/api/camera` | `{"on":true}` | RealSense on/off, independent of the stack |
 | POST | `/api/estop` | `{"on":true}` | halt the motors and cancel the goal |
-| GET | `/api/places` | | small, stable status for an assistant: `ready`, `places`, `nav.state`, pose |
+| POST | `/api/roam` | `{"on":true}` | start / stop free roam; 409 with the reason if it cannot start |
+| GET | `/api/places` | | small, stable status for an assistant: `ready`, `places`, `roaming`, `nav.state`, pose |
 
 `nav.state` goes `sending → active → arrived` (or `aborted`), which is what an
 assistant would poll to know when to start talking.
