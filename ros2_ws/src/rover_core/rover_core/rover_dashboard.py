@@ -2370,7 +2370,9 @@ function stRender(st,maps,save,cam){
   // starts the new one in a single action, so the rover is never left dark.
   const sameMap = s==='navigation' &&
                   (st.opts&&st.opts.map)===$('#mapsel').value;
-  $('#m-nav').disabled=busy||s==='external'||sameMap;
+  // No saved map means nothing to navigate on; the server refuses too.
+  $('#m-nav').disabled=busy||s==='external'||sameMap||!maps.length;
+  $('#m-nav').title=maps.length?'':'No saved map yet: use MAP ROOM, drive the room, then SAVE MAP';
   $('#m-map').disabled=busy||s==='external'||s==='mapping';
   $('#m-nav').textContent = s==='mapping' ? 'SWITCH TO NAVIGATE'
                           : s==='navigation' ? 'LOAD THIS MAP' : 'NAVIGATE';
@@ -2890,6 +2892,15 @@ class Handler(BaseHTTPRequestHandler):
                 opts = {}
                 if body.get('map'):
                     opts['map'] = str(body['map'])
+                elif want == 'navigation':
+                    # With no map named, the launch file quietly falls back to
+                    # the map shipped in the package -- a different room. AMCL
+                    # then cannot find the rover, every goal starts "in lethal
+                    # space", and nothing says why. Refuse instead.
+                    self._send(409, 'application/json', json.dumps({
+                        'ok': False, 'err': 'no map selected: map the room first '
+                        '(MAP ROOM, drive it, SAVE MAP), then NAVIGATE'}).encode())
+                    return
                 # A switch stops the old stack and starts the new one as ONE
                 # action, so "leave mapping" never lands on a dead rover.
                 ok, msg = (NODE.sup.switch(want, opts) if body.get('switch')
