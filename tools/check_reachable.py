@@ -29,7 +29,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from nav2_msgs.action import ComputePathToPose
 from geometry_msgs.msg import PoseStamped
-from std_srvs.srv import Empty
+from nav2_msgs.srv import ClearEntireCostmap
 
 
 class Checker(Node):
@@ -50,15 +50,25 @@ class Checker(Node):
         return None
 
     def clear_costmaps(self):
-        done = []
+        """Clear both costmaps. Returns (cleared, failed) lists of costmap names.
+
+        A costmap counts as cleared only if its service ANSWERED. Nav2's services
+        are nav2_msgs/ClearEntireCostmap; this used to call them as std_srvs/Empty,
+        which never matches, so nothing was ever cleared -- and the caller went on
+        to report "genuinely blocked" about a retry that had not been tried.
+        """
+        cleared, failed = [], []
         for srv in ('/global_costmap/clear_entirely_global_costmap',
                     '/local_costmap/clear_entirely_local_costmap'):
-            cli = self.create_client(Empty, srv)
-            if cli.wait_for_service(timeout_sec=3.0):
-                fut = cli.call_async(Empty.Request())
-                rclpy.spin_until_future_complete(self, fut, timeout_sec=5.0)
-                done.append(srv.split('/')[1])
-        return done
+            name = srv.split('/')[1]
+            cli = self.create_client(ClearEntireCostmap, srv)
+            if not cli.wait_for_service(timeout_sec=3.0):
+                failed.append(name)
+                continue
+            fut = cli.call_async(ClearEntireCostmap.Request())
+            rclpy.spin_until_future_complete(self, fut, timeout_sec=5.0)
+            (cleared if fut.done() and fut.result() is not None else failed).append(name)
+        return cleared, failed
 
     def plan(self, x, y, yaw_deg=0.0):
         if not self.ac.wait_for_server(timeout_sec=8.0):
@@ -135,8 +145,17 @@ def main():
 
     if not ok and a.clear:
         print("\nclearing costmaps and retrying...")
-        cleared = n.clear_costmaps()
+        cleared, failed = n.clear_costmaps()
         print(f"  cleared: {', '.join(cleared) or 'none'}")
+        if failed:
+            print(f"  COULD NOT CLEAR: {', '.join(failed)}")
+        if not cleared:
+            # Without a clear there is no second opinion to give: re-planning
+            # against the same costmap would only repeat the first answer.
+            print("\n  -> can't tell a stale mark from a real blockage: no costmap")
+            print("     could be cleared, so the retry would prove nothing.")
+            n.destroy_node(); rclpy.shutdown()
+            sys.exit(2)
         time.sleep(2.0)
         for _ in range(20):
             rclpy.spin_once(n, timeout_sec=0.1)
@@ -150,6 +169,13 @@ def main():
             print("  -> genuinely blocked. Not a stale mark: there is no route")
             print("     even with a clean costmap. Move the obstruction, or pick")
             print("     a different station.")
+            print("     Often nothing is in the way at all: the footprint is a circle")
+            print("     (~0.33 m), so a goal within that of a wall or of unmapped space")
+            print("     is 'blocked' even on open-looking floor. Try a spot further")
+            print("     into the room -- find_goal.py lists ones the planner accepts.")
+            if failed:
+                print(f"     (note: {', '.join(failed)} could not be cleared, so a stale")
+                print("     mark there is not ruled out.)")
     elif not ok:
         print("\n  re-run with --clear to tell a stale mark from a real blockage.")
 
