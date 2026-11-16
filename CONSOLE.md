@@ -57,16 +57,38 @@ it reports how many goals it actually stopped.
 only) makes the rover drive itself around the loaded map until you stop it. It
 picks a spot, drives there, pauses about 3 s, picks another, and so on.
 
-Before you start it: the map must be loaded, and the rover **localised** (pose
-set, scan lined up with the walls) — the same preparation as sending a goal.
-The page asks for confirmation first. Stay close, and keep the area clear.
+Before you start it:
+- the map must be loaded and the rover **localised** (pose set, scan lined up
+  with the walls), the same preparation as sending a goal;
+- the **camera must be on** (CAMERA button). It is the only sensor that sees
+  below or above the single lidar plane at 27.5 cm. Roam refuses to start without
+  it, and stops itself if the camera stops delivering frames;
+- the rover must be standing on **open floor**. If its own spot is one Nav2
+  treats as blocked (within ~0.35 m of a wall or unmapped edge), the planner can
+  not plan out of it and roam gives up at once. Drive it clear first.
 
-How it works: each spot is an ordinary Nav2 goal, so the rover plans, steers
-around people and furniture and recovers exactly as it does for **GO**. Spots
-are chosen on the map only where there is plenty of room around them (0.5 m of
-clear floor), in the part of the floor the rover can actually reach, a real
-drive away, and away from the last few places it visited, so it covers the room
-instead of shuffling between two corners.
+The page asks for confirmation. Stay beside the rover, with a hand near
+EMERGENCY STOP, and keep the area clear.
+
+How it works. Each round:
+1. **Where:** it fetches Nav2's own costmap and picks a spot there, in the part of
+   the floor the rover can reach, clear of walls and of never-mapped space by an
+   extra 0.2 m (`roam_clearance_m`) beyond what the costmap already blocks, a real
+   drive away, and away from the last few places visited.
+2. **Ask first:** it asks Nav2's planner whether that spot is reachable. If not,
+   the spot is never sent; it tries another (up to 6 per round, and never offers
+   a refused spot again that roam). A goal Nav2 can't plan is exactly what used to
+   set off its recovery moves, so refusing it here costs nothing.
+3. **Drive:** the spot goes to Nav2 as an ordinary goal, with its own recovery
+   tree (`roam_recovery.xml`): on trouble it clears the costmaps and waits, and
+   after two rounds the goal aborts so roam can pick elsewhere. **It never spins
+   or reverses.** GO and SET GOAL still use `booth_recovery.xml`, which does.
+4. **Pause** about 3 s, then repeat.
+
+How much room you need: the usable floor is what the costmap leaves free. In the
+lab map (2026-11) that was 7.8 m2, and extra clearance shrinks it fast (3.3 m2
+largest piece at +0.1 m, 1.9 at +0.2, 1.1 at +0.3). Roaming needs a bigger,
+complete map more than it needs a bigger margin.
 
 **It stops itself** — and cancels the goal in progress — when:
 
@@ -79,16 +101,20 @@ instead of shuffling between two corners.
 | the stack changes mode or stops | the stack is … not navigation |
 | the lidar stops publishing for 3 s | the lidar stopped publishing |
 | the ESP32 stops reporting for 3 s | the ESP32 stopped reporting |
+| the camera stops delivering frames for 3 s | the depth camera stopped |
 | the map position is missing or stale for about 6 s | the rover lost its position on the map |
-| 4 goals in a row fail | gave up after 4 failed goals in a row |
+| 4 rounds in a row fail (a round fails when 6 spots in a row are refused by the planner, or Nav2 gives up on one) | gave up after 4 failed goals in a row |
 | a single goal takes over 2 minutes | that goal is cancelled and counted as a failure |
 
 The reason stays on the panel after it stops. A person's request always wins:
 sending a goal while it roams ends the roam and the rover goes where you said.
 
 Speed is whatever Nav2 is set to (`desired_linear_vel` in `nav2_params.yaml`);
-roaming adds no speed of its own. The pause, clearance and give-up limits are
-the console's `roam_dwell_s`, `roam_clearance_m` and `roam_max_fails` parameters.
+roaming adds no speed of its own. The tunables are console parameters:
+`roam_dwell_s`, `roam_clearance_m`, `roam_max_fails`, `roam_tries` and
+`roam_require_camera`. If `roam_recovery.xml` is not installed (rebuild
+`my_robot_bringup`), roam refuses to start rather than fall back to the
+spinning tree.
 
 From another program: `rover.roam(True)` / `rover.roam(False)` in
 `rover_client.py`, or `python3 tools/rover_client.py roam on`.

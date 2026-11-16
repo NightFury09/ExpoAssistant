@@ -31,14 +31,32 @@ def clearance_map(grid, res):
     return ndimage.distance_transform_edt(~blocked) * res
 
 
+def costmap_to_grid(raw):
+    """Nav2's raw costmap bytes -> the occupancy scale pick_goal reads.
+
+    Raw: 0 free, 1-252 inflation gradient, 253 inscribed (the rover cannot be
+    centred here), 254 lethal, 255 unknown. Out: -1 unknown, 100 for 253+, and the
+    gradient scaled onto 0-98, so the same FREE_MAX threshold means "low cost".
+    """
+    raw = np.asarray(raw, dtype=np.int32)
+    return np.where(raw == 255, -1,
+                    np.where(raw >= 253, 100, raw * 98 // 252)).astype(np.int16)
+
+
 def pick_goal(grid, meta, pose, recent=(), rng=None, clearance_m=0.5,
-              min_dist=1.0, max_dist=5.0, samples=40, seed_radius_m=1.0):
+              min_dist=1.0, max_dist=5.0, samples=40, seed_radius_m=1.0,
+              rejected=()):
     """Choose the next roam goal.
 
-    grid    int array (rows, cols); row 0 is the LOWEST y, as in an OccupancyGrid
+    grid    int array (rows, cols); row 0 is the LOWEST y, as in an OccupancyGrid.
+            The saved map, or -- better, because it is what the planner uses --
+            Nav2's costmap through costmap_to_grid().
     meta    {'res', 'ox', 'oy'}  metres per cell and the map-frame origin
     pose    (x, y) of the rover in the map frame
     recent  (x, y) of recently visited goals, oldest first
+    rejected (x, y) of spots the planner has already refused. Unlike `recent`,
+            never relaxed: re-offering a spot the planner said no to only
+            wastes a round trip.
 
     Returns ({'x', 'y', 'yaw'}, None) -- yaw in degrees, facing the direction of
     travel -- or (None, reason) when there is nowhere sensible to go.
@@ -75,6 +93,8 @@ def pick_goal(grid, meta, pose, recent=(), rng=None, clearance_m=0.5,
 
     def candidates(lo, hi, avoid):
         m = (d_robot >= lo) & (d_robot <= hi)
+        for rx, ry in rejected:
+            m &= np.hypot(xs - rx, ys - ry) >= 0.6
         # Not on top of somewhere it just was.
         for rx, ry in avoid:
             m &= np.hypot(xs - rx, ys - ry) >= 1.0

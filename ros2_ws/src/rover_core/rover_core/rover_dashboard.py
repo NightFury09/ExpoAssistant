@@ -20,7 +20,7 @@ micro-ROS transport drops messages if flooded -- that failure looked exactly
 like "Nav2 is broken" for hours. See TROUBLESHOOTING.md.
 """
 import json, math, threading, time, io, os, re, socket, urllib.parse
-import errno, subprocess
+import errno, functools, subprocess
 import yaml
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -35,7 +35,9 @@ from PIL import Image as PImage
 from rclpy.action import ActionClient
 from geometry_msgs.msg import (Twist, Point32, PoseStamped,
                                PoseWithCovarianceStamped)
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateToPose, ComputePathToPose
+from nav2_msgs.srv import GetCostmap
+from ament_index_python.packages import get_package_share_directory
 from rcl_interfaces.srv import GetParameters
 from action_msgs.srv import CancelGoal
 from slam_toolbox.srv import SerializePoseGraph
@@ -215,7 +217,18 @@ class Dash(Node):
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
         # --- free roam: see the block of roam_* methods further down ---
-        self.declare_parameter('roam_clearance_m', 0.5)     # min room around a goal
+        # Extra room, in metres, a roam spot must have BEYOND the cells Nav2's
+        # costmap already blocks (which stop ~0.35 m from a wall or unmapped
+        # edge). 0.2 keeps goals ~0.55 m from walls (it was 0.5 from the saved
+        # map's walls). Raise it for more margin: in the 2026-11 lab the usable
+        # floor is only 7.8 m2 and shrinks fast -- 3.3 m2 at +0.1, 1.9 at +0.2,
+        # 1.1 at +0.3 -- so more margin needs a bigger mapped room first.
+        self.declare_parameter('roam_clearance_m', 0.2)
+        # Spots the planner may refuse in one round before it counts as a failure.
+        self.declare_parameter('roam_tries', 6)
+        # Roam needs the depth camera running: it is the only sensor that sees
+        # below or above the single 27.5 cm lidar plane.
+        self.declare_parameter('roam_require_camera', True)
         self.declare_parameter('roam_dwell_s', 3.0)         # pause at each spot
         self.declare_parameter('roam_goal_timeout_s', 120.0)
         self.declare_parameter('roam_max_fails', 4)         # in a row, then give up
@@ -223,10 +236,34 @@ class Dash(Node):
         self.roam_dwell = float(self.get_parameter('roam_dwell_s').value)
         self.roam_goal_timeout = float(self.get_parameter('roam_goal_timeout_s').value)
         self.roam_max_fails = int(self.get_parameter('roam_max_fails').value)
+        self.roam_tries = int(self.get_parameter('roam_tries').value)
+        self.roam_require_camera = bool(self.get_parameter('roam_require_camera').value)
+        # Roam goals name their own recovery tree (NavigateToPose's behavior_tree
+        # field): booth_recovery.xml spins and reverses on a failed goal, which
+        # roam must never do. None means "not installed": roam then refuses to
+        # start rather than fall back to the spinning tree.
+        try:
+            self.roam_tree = os.path.join(
+                get_package_share_directory('my_robot_bringup'),
+                'behavior_trees', 'roam_recovery.xml')
+            if not os.path.exists(self.roam_tree):
+                self.roam_tree = None
+        except Exception:                           # noqa: BLE001
+            self.roam_tree = None
+        # Roam asks the planner whether a spot is reachable BEFORE sending it,
+        # and fetches the costmap on demand: Nav2 publishes the full one once and
+        # only deltas after, so a subscription would go stale.
+        self.plan_client = ActionClient(self, ComputePathToPose, 'compute_path_to_pose')
+        self.cm_client = self.create_client(GetCostmap, '/global_costmap/get_costmap')
         self.roam = {'on': False, 'phase': 'off', 'goals': 0, 'fails': 0,
                      'msg': '', 'target': None, 'dwell_until': 0.0,
-                     'sent_at': 0.0, 'drive_since': 0.0, 'lost_since': None}
+                     'sent_at': 0.0, 'drive_since': 0.0, 'lost_since': None,
+                     'tries': 0, 'fetch_at': 0.0, 'check_at': 0.0,
+                     'check_goal': None, 'check_id': 0}
         self.roam_recent = []       # last few goals, so it covers the room
+        self.roam_rejected = []     # spots the planner refused this roam
+        self._roam_cm = None        # (grid, meta) from the costmap service
+        self._roam_plan = None      # planner's answer to the current check
         # Cancelling through the goal handle only works for goals THIS console
         # sent. A goal published to /goal_pose, or sent from Foxglove, leaves us
         # with no handle at all -- and that is exactly when you most want a stop
@@ -603,6 +640,7 @@ class Dash(Node):
             return
 
         g = NavigateToPose.Goal()
+        g.behavior_tree = str(req.get('bt') or '')     # '' = Nav2's default tree
         g.pose.header.frame_id = 'map'
         g.pose.header.stamp = self.get_clock().now().to_msg()
         g.pose.pose.position.x = float(req['x'])
@@ -690,6 +728,11 @@ class Dash(Node):
         return {'on': r['on'], 'phase': phase, 'goals': r['goals'],
                 'fails': r['fails'], 'msg': r['msg'], 'target': r['target']}
 
+    def _camera_fresh(self, now):
+        """True while depth/colour frames are actually arriving."""
+        with self.lock:
+            return len(self.cam_times) > 2 and now - self.cam_times[-1] < 3.0
+
     def _roam_sensors_stale(self, now):
         with self.lock:
             ss, dg = self.scan_stats, self.diag
@@ -717,6 +760,8 @@ class Dash(Node):
         why = self._roam_sensors_stale(now)
         if why:
             return why
+        if self.roam_require_camera and not self._camera_fresh(now):
+            return 'the depth camera stopped'
         # A few seconds without a map->base transform is normal while AMCL
         # re-converges; a long one means it no longer knows where it is. The
         # lookup always takes the LATEST transform, so a dead AMCL leaves the
@@ -755,11 +800,27 @@ class Dash(Node):
         why = self._roam_sensors_stale(now)
         if why:
             return False, why
+        if self.roam_tree is None:
+            return False, ('the roam recovery tree is not installed: rebuild '
+                           'my_robot_bringup (colcon build --packages-select '
+                           'my_robot_bringup)')
+        if self.roam_require_camera and (
+                self.sup.camera_status().get('state') != 'on'
+                or not self._camera_fresh(now)):
+            return False, ('turn the camera on first (CAMERA button): roam relies '
+                           'on its depth view for low and high objects that the '
+                           'lidar plane misses')
+        if not self.plan_client.server_is_ready() or not self.cm_client.service_is_ready():
+            return False, 'Nav2 planner or costmap service is not available yet'
         with self.lock:
             self.roam.update(on=True, phase='pick', goals=0, fails=0, msg='',
                              target=None, dwell_until=0.0, sent_at=0.0,
-                             drive_since=0.0, lost_since=None)
+                             drive_since=0.0, lost_since=None, tries=0,
+                             fetch_at=0.0, check_at=0.0, check_goal=None)
             self.roam_recent = []
+            self.roam_rejected = []
+            self._roam_cm = None
+            self._roam_plan = None
         self.get_logger().info('free roam ON')
         return True, 'roaming'
 
@@ -814,17 +875,61 @@ class Dash(Node):
             # Wait out the pause at the last spot, and any goal still winding down.
             if now < r['dwell_until'] or nav['state'] in self.ROAM_BUSY:
                 return
-            if pose is None or grid is None:
+            if pose is None:
                 return
+            if not self.cm_client.service_is_ready():
+                self._roam_fail('Nav2 costmap service is not available')
+                return
+            with self.lock:
+                self._roam_cm = None
+                self.roam.update(phase='fetch', fetch_at=now, tries=0)
+            self.cm_client.call_async(GetCostmap.Request()).add_done_callback(
+                self._roam_cm_done)
+            return
+
+        if r['phase'] == 'fetch':
+            with self.lock:
+                cm = self._roam_cm
+                rejected = list(self.roam_rejected)
+            if cm is None:
+                if now - r['fetch_at'] > 5.0:
+                    self._roam_fail('Nav2 did not return its costmap')
+                return
+            if pose is None:
+                return
+            grid, meta = cm
             goal, why = roam_planner.pick_goal(
                 grid, meta, (pose['x'], pose['y']), recent,
-                clearance_m=self.roam_clearance)
+                clearance_m=self.roam_clearance, rejected=rejected)
             if goal is None:
                 self._roam_fail(f'nowhere to go: {why}')
                 return
+            self._roam_ask_planner(goal)
+            return
+
+        if r['phase'] == 'check':
             with self.lock:
-                self.nav_req = dict(goal)
-                self.roam.update(phase='launch', sent_at=now, msg='',
+                res, goal = self._roam_plan, self.roam['check_goal']
+            if res is None:
+                if now - r['check_at'] < 6.0:
+                    return
+                res = False                     # the planner never answered
+            if not res:
+                # Refused: remember it, and try another spot without ever having
+                # sent this one to Nav2 -- a refused goal is what triggers the
+                # recoveries, so refusing it here costs nothing.
+                with self.lock:
+                    self.roam_rejected = (self.roam_rejected
+                                          + [(goal['x'], goal['y'])])[-30:]
+                    tries = self.roam['tries'] + 1
+                    self.roam['tries'] = tries
+                    self.roam['phase'] = 'fetch'    # re-pick from the same costmap
+                if tries >= self.roam_tries:
+                    self._roam_fail(f'the planner refused {tries} spots in a row')
+                return
+            with self.lock:
+                self.nav_req = dict(goal, bt=self.roam_tree)
+                self.roam.update(phase='launch', sent_at=now, msg='', tries=0,
                                  target=[goal['x'], goal['y']])
                 self.roam_recent = (self.roam_recent
                                     + [(goal['x'], goal['y'])])[-6:]
@@ -858,6 +963,73 @@ class Dash(Node):
         else:
             # idle: somebody cancelled the goal, so they want it to stop.
             self.roam_stop('the goal was cancelled', cancel=False)
+
+    def _roam_cm_done(self, fut):
+        try:
+            m = fut.result().map
+            sp = m.metadata
+            raw = np.asarray(m.data, dtype=np.uint8).reshape(sp.size_y, sp.size_x)
+            cm = (roam_planner.costmap_to_grid(raw),
+                  {'res': sp.resolution, 'ox': sp.origin.position.x,
+                   'oy': sp.origin.position.y})
+        except Exception as e:                      # noqa: BLE001
+            self.get_logger().warn(f'free roam: costmap fetch failed: {e}')
+            return                                  # tick_roam times out and counts it
+        with self.lock:
+            self._roam_cm = cm
+
+    def _roam_ask_planner(self, goal):
+        """Ask Nav2's planner whether this spot is reachable. Answer lands in
+        self._roam_plan (True / False); tick_roam is in phase 'check' meanwhile."""
+        g = ComputePathToPose.Goal()
+        g.goal.header.frame_id = 'map'
+        g.goal.header.stamp = self.get_clock().now().to_msg()
+        g.goal.pose.position.x = float(goal['x'])
+        g.goal.pose.position.y = float(goal['y'])
+        th = math.radians(float(goal['yaw'])) / 2.0
+        g.goal.pose.orientation.z = math.sin(th)
+        g.goal.pose.orientation.w = math.cos(th)
+        g.use_start = False                         # plan from the rover's own pose
+        g.planner_id = 'GridBased'
+        with self.lock:
+            self._roam_plan = None
+            self.roam['check_id'] += 1
+            cid = self.roam['check_id']
+            self.roam.update(phase='check', check_goal=dict(goal),
+                             check_at=time.time())
+        if not self.plan_client.server_is_ready():
+            with self.lock:
+                self._roam_plan = False
+            return
+        self.plan_client.send_goal_async(g).add_done_callback(
+            functools.partial(self._roam_plan_accepted, cid))
+
+    def _roam_plan_answer(self, cid, ok):
+        with self.lock:
+            if self.roam['on'] and self.roam['check_id'] == cid:   # not a stale reply
+                self._roam_plan = bool(ok)
+
+    def _roam_plan_accepted(self, cid, fut):
+        try:
+            h = fut.result()
+        except Exception:                           # noqa: BLE001
+            self._roam_plan_answer(cid, False)
+            return
+        if not h.accepted:
+            self._roam_plan_answer(cid, False)
+            return
+        h.get_result_async().add_done_callback(
+            functools.partial(self._roam_plan_done, cid))
+
+    def _roam_plan_done(self, cid, fut):
+        from action_msgs.msg import GoalStatus
+        try:
+            r = fut.result()
+            ok = (r.status == GoalStatus.STATUS_SUCCEEDED
+                  and len(r.result.path.poses) >= 2)
+        except Exception:                           # noqa: BLE001
+            ok = False
+        self._roam_plan_answer(cid, ok)
 
     def set_initial_pose(self, x, y, yaw_deg):
         m = PoseWithCovarianceStamped()

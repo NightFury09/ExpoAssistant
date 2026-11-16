@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!--
+  Behavior tree for FREE ROAM goals only. The console names this file in each
+  roam goal (NavigateToPose's behavior_tree field); every other goal - GO to a
+  station, SET GOAL on the map - still uses booth_recovery.xml.
+
+  This is booth_recovery.xml with the Spin and BackUp recoveries taken out.
+
+  Why: on its first real run, roam kept sending goals the planner could not reach.
+  Each one failed, and the booth tree answered by spinning and reversing, up to
+  eight rounds per goal. The rover's only sensing is one lidar plane at 27.5 cm
+  (the depth camera ignores anything inside 0.6 m), so the spin's collision check
+  could not see low or very close objects, and pivoting on the spot swept the
+  chassis corners into one. Roaming is unattended motion in a room that has things
+  in it; it must never rotate or reverse blindly beside them.
+
+  What it does instead: replan with a cleared costmap, then wait. After two such
+  rounds the goal ABORTS, which is cheap - roam picks a different spot (or stops
+  after four failures in a row). Giving up fast is the whole point; a roaming
+  rover that is stuck should stand still, not manoeuvre.
+
+  The nodes are the same ones booth_recovery.xml uses, so no plugin list changes.
+  test_roam_tree.py checks that no Spin/BackUp/DriveOnHeading creeps back in.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="2" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="2.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <Sequence name="ClearAndWait">
+          <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          <Wait wait_duration="3"/>
+        </Sequence>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

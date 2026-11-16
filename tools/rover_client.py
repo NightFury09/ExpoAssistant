@@ -152,8 +152,9 @@ class Rover:
     def roam(self, on=True):
         """Free roam: drive itself between spots on the loaded map until stopped.
 
-        Needs Navigation mode and a localised rover (the same as ready(), minus
-        the demo points). Raises RoverError with the reason if it will not start.
+        Needs Navigation mode, a localised rover (the same as ready(), minus the
+        demo points), AND the depth camera running. Raises RoverError with the
+        reason if it will not start.
         Sending go() or cancel() while it roams ends the roam -- a request from
         a person always wins.
         """
