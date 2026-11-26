@@ -345,7 +345,7 @@ local_costmap:
       #
       # The global costmap keeps its static_layer: planning is what the map is
       # for. The controller reacts to what the sensors see NOW.
-      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "voxel_layer", "front_cam_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -423,6 +423,41 @@ local_costmap:
           obstacle_max_range: 4.0
           raytrace_min_range: 0.60
           raytrace_max_range: 4.5
+      # ---- Front webcam: floor-boundary scan (see FRONT_CAMERA.md) ----------
+      # A SEPARATE layer, not another source on obstacle_layer, on purpose: each
+      # layer keeps its own grid and the master takes the maximum. With one shared
+      # layer the camera's "floor all the way" rays would clear cells the LIDAR
+      # marked, and a wrong floor model would erase real obstacles.
+      #
+      # Inert unless front_cam_scan is publishing (launch with use_front_cam:=true):
+      # expected_update_rate 0 means a silent camera never marks the costmap
+      # "not current", so a dead webcam changes nothing, it leaves the rover with
+      # the lidar and the depth camera it had before.
+      #
+      # inf_is_valid: the scan uses +inf for "floor to max range here", and that is
+      # what lets this layer clear its own old marks. The lidar source above
+      # leaves it off: its inf means "no return", not "empty".
+      # Range is capped at 2.4 m, past which one pixel of floor is > 10 cm.
+      # min_obstacle_height 0.0: the scan frame sits at camera height, so every
+      # point is in [0.25, ...] there; the ground-contact points are real floor
+      # points, so nothing is filtered by height.
+      front_cam_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: front_scan
+        front_scan:
+          topic: /front_cam/scan
+          data_type: "LaserScan"
+          marking: True
+          clearing: True
+          inf_is_valid: True
+          obstacle_min_range: 0.25
+          obstacle_max_range: 2.4
+          raytrace_min_range: 0.0
+          raytrace_max_range: 2.5
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.0
+          expected_update_rate: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -573,3 +608,40 @@ global_costmap:
         # the planner refuse gaps the rover physically clears. The requirement
         # is that wherever the body fits, the rover goes.
         inflation_radius: 0.35
+
+# ---------------------------------------------------------------------------
+# Velocity smoother. Nav2's own bringup already starts this node and routes
+# controller -> /cmd_vel_nav -> smoother -> /cmd_vel; it just had NO block here,
+# so it ran on built-in defaults (2.5 m/s^2), which for a rover that tops out at
+# 0.22 m/s never limit anything. The base then received every controller step
+# change raw, which reads as stop-and-go. These limits are the ones that make
+# the smoother do something.
+#
+#   max_accel 0.5 m/s^2   0 -> 0.22 m/s in ~0.45 s: quick, but not a step.
+#   max_decel 0.9 m/s^2   stops in ~3 cm at full speed, harder than it starts.
+#   rotation  1.5 / 2.0   in line with behavior_server's rotational_acc_lim 1.8.
+#   OPEN_LOOP             limits the command stream, ignores odometry. Odometry
+#                         here is slow (~4 Hz) and closed loop would inherit
+#                         every one of its hiccups.
+#   velocity_timeout 0.5  if the controller goes quiet, send zero after 0.5 s
+#                         rather than the default 1.0.
+#
+# max_velocity sits above everything the controller can ask for (0.22 linear,
+# 0.55 rotate-to-heading, 1.0 behaviours), so it never clips a command.
+# Only commands that pass through Nav2 are smoothed: manual driving from the
+# console publishes /cmd_vel directly and is unchanged.
+# ---------------------------------------------------------------------------
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: false
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.30, 0.0, 1.0]
+    min_velocity: [-0.30, 0.0, -1.0]
+    max_accel: [0.5, 0.0, 1.5]
+    max_decel: [-0.9, 0.0, -2.0]
+    odom_topic: "odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 0.5

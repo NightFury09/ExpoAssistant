@@ -122,6 +122,22 @@ running**. `rover_teleop_v2` publishes zeros on a timer and will fight the
 controller, so the robot twitches and goes nowhere. `ros2 topic info /cmd_vel`
 must show exactly **one** publisher.
 
+## Front camera and smooth driving
+
+All of these are explained in [../FRONT_CAMERA.md](../FRONT_CAMERA.md). The first group
+needs no rover.
+
+| script | what it answers |
+|---|---|
+| `camera_mount_planner.py` | where can the webcam go and still see the floor? (under the lidar cannot) |
+| `footprint_report.py` | true size of the rover from the URDF, and whether the costmap circle covers its pivot |
+| `calibrate_front_cam.py` | lens calibration from a printed chessboard, written into `front_cam.yaml` |
+| `check_front_cam_mount.py` | is the camera's tilt right? uses an object at a known distance (`--demo` needs no camera) |
+| `check_obstacle_visibility.py` | rover standing still, chair in front: which of lidar, depth camera, front camera, costmap saw it |
+| `drive_profile.py` | where does the stagger come from: odometry rate, command steps, stalls, pivoting |
+| `test_front_cam_pipeline.py` | real scan node, synthetic frames: right distance, silent on a bad picture |
+| `test_front_cam_costmap.py` | real Nav2 costmap: the camera marks and clears, and cannot erase a lidar mark |
+
 ---
 
 Background and the full symptom→cause→fix tables are in

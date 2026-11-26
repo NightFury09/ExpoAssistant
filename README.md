@@ -335,6 +335,7 @@ rover_project/
 | [MAPPING_GUIDE.md](MAPPING_GUIDE.md) | you are mapping a new room; it covers driving technique, not just buttons |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | something is wrong: how the system fits together and symptom → cause → fix |
 | [SESSION_STATE.md](SESSION_STATE.md) | you are picking the project up: what works, what is untested, next steps |
+| [FRONT_CAMERA.md](FRONT_CAMERA.md) | you are adding the front webcam, or chasing chair legs and staggered driving |
 | [NEXT_STEPS.md](NEXT_STEPS.md) | you want the parked work: D455 IMU, lidar riser, drive registers |
 | [desktop/README.md](desktop/README.md) | the console app, and full screen at boot |
 | [tools/README.md](tools/README.md) | the diagnostic scripts |

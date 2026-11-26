@@ -101,7 +101,7 @@
              returns, which is that mast
          Earlier this read "0.155 0.0 0.22" with zero yaw. Note the corner-bumper
          geometry ALONE cannot tell "front facing forward" from "rear facing
-         backward" -- both predict +/-149.6 deg. Only the object-in-front test
+         backward": both predict +/-149.6 deg. Only the object-in-front test
          distinguishes them. -->
     <origin xyz="-0.155 0.0 0.275" rpy="0 0 3.14159265"/>
   </joint>
