@@ -1,0 +1,59 @@
+# Front webcam (Logitech C270): mount, intrinsics and floor-vision tuning.
+# One file feeds BOTH the camera TF and the scan node, so they cannot disagree:
+# the mount (x, y, z, pitch_deg, yaw_deg) lives in the front_cam_scan section and
+# front_cam.launch.py builds the TF from the same numbers.
+# Read FRONT_CAMERA.md before changing anything here.
+#
+# After mounting the camera, EDIT THE MOUNT to what you measured. Distances come
+# from this geometry, and they are only as good as these five numbers: a 1 cm
+# error in height or 1 degree of pitch moves a 1.5 m reading by ~10 cm.
+# python3 tools/check_front_cam_mount.py then checks them against a real object.
+front_cam:
+  ros__parameters:
+    device: /dev/video0
+    width: 640
+    height: 480
+    fps: 15.0
+    fourcc: MJPG
+    frame_id: front_cam_optical_frame
+    # Intrinsics. 0 = uncalibrated: a pinhole is assumed from hfov_deg.
+    # tools/calibrate_front_cam.py writes real values here.
+    # C270: the spec is 60 deg DIAGONAL, about 49 deg horizontal in 4:3.
+    hfov_deg: 52.0
+    fx: 0.0
+    fy: 0.0
+    cx: 0.0
+    cy: 0.0
+    dist: [0.0, 0.0, 0.0, 0.0, 0.0]
+
+front_cam_scan:
+  ros__parameters:
+    # ---- MOUNT. Base frame: x forward, y left, z up from the FLOOR. ----------
+    x: -0.155          # under the lidar, as asked. The lidar is at x=-0.155, z=0.275.
+    y: 0.0
+    z: 0.25            # just under the lidar plate
+    pitch_deg: 20.0    # nose-down tilt, positive looks at the floor
+    yaw_deg: 0.0
+    # WARNING: at this spot the camera is ~2 cm above the rover's own deck (top
+    # at 0.23 m), so almost every downward ray lands on the deck, not the floor.
+    # tools/camera_mount_planner.py shows it and front_cam_scan logs an error at
+    # start. Floor in view needs the lens at the front edge (x ~ 0.23) or at
+    # least 0.45 m up. The mast that carries the screen stands about 22 cm from
+    # the lidar (URDF note): check it is not in the camera's view.
+    # ---- scan ----------------------------------------------------------------
+    scan_frame: front_cam_scan
+    bins: 90
+    min_range: 0.25
+    max_range: 2.5          # past ~2.5 m one pixel of floor is >10 cm: untrusted
+    max_hz: 10.0
+    min_confidence: 0.5
+    # vision tuning (see ground_vision.VisionParams)
+    work_width: 320
+    seed_rows: 0.15
+    gate_sigmas: 4.0
+    light_slack: 14.0
+    blur_px: 5
+    close_rows: 7
+    min_width_px: 3
+    min_run_px: 10
+    min_floor_fraction: 0.30

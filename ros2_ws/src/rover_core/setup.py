@@ -24,6 +24,8 @@ setup(
             'rover_odometry = rover_core.rover_odometry:main',
             'scan_filter = rover_core.scan_filter:main',
             'rover_dashboard = rover_core.rover_dashboard:main',
+            'front_cam = rover_core.front_cam:main',
+            'front_cam_scan = rover_core.front_cam_scan:main',
         ],
     },
 )

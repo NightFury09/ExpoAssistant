@@ -112,6 +112,15 @@ def generate_launch_description():
         'use_camera', default_value='false',
         description='Also bring up the RealSense D455 for 3D obstacles')
 
+    # The front webcam (C270) is also OFF by default, and is NOT the D455: it is the
+    # low forward camera that sees the floor and thin things like chair legs.
+    # It has one owner at a time (the reception greeter opens it too), so stop that
+    # first. Its scan feeds the local costmap's front_cam_layer, which is inert
+    # while this is off. See FRONT_CAMERA.md.
+    declare_use_front_cam_cmd = DeclareLaunchArgument(
+        'use_front_cam', default_value='false',
+        description='Also bring up the front webcam floor scan (see FRONT_CAMERA.md)')
+
     # The web dashboard can run ALONGSIDE navigation: it only subscribes to
     # topics and publishes /cmd_vel while you are actively driving, staying
     # silent otherwise so Nav2 keeps the wheel. Grab a key and you take over
@@ -223,6 +232,12 @@ def generate_launch_description():
                 os.path.join(my_robot_bringup_path, 'launch', 'realsense.launch.py')),
             condition=IfCondition(LaunchConfiguration('use_camera')))])
 
+    front_cam_launch = TimerAction(period=10.0, actions=[
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(my_robot_bringup_path, 'launch', 'front_cam.launch.py')),
+            condition=IfCondition(LaunchConfiguration('use_front_cam')))])
+
     dashboard_node = TimerAction(period=12.0, actions=[Node(
         package='rover_core', executable='rover_dashboard', name='rover_dashboard',
         output='screen',
@@ -238,6 +253,7 @@ def generate_launch_description():
         declare_log_level_cmd,
         declare_amcl_scan_cmd,
         declare_use_camera_cmd,
+        declare_use_front_cam_cmd,
         declare_use_dashboard_cmd,
         esp32_reset_action,           # reset ESP32
         delayed_micro_ros,            # agent -> /wheel_ticks
@@ -247,6 +263,7 @@ def generate_launch_description():
         scan_filter_node,             # /scan_raw -> /scan, mast removed
         nav2_bringup_launch,          # AMCL + Nav2 stack (costmaps use the pointcloud)
         realsense_launch,             # optional D455 -> local costmap voxel_layer
+        front_cam_launch,             # optional front webcam -> local costmap front_cam_layer
         dashboard_node,               # optional web UI on :8080 (manual override)
         foxglove_bridge_node,         # visualization over network (ws://<jetson-ip>:8765)
     ])
