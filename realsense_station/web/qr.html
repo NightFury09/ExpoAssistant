@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RP tech — Demo QR codes</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{--ink:#1a1a1a;--mut:#6b7280;--line:#d9dce3;--rp:#b0208c;--nv:#76b900}
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef0f4;color:var(--ink);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .page{max-width:1040px;margin:0 auto;padding:22px}
+  .head{display:flex;align-items:center;gap:16px;margin-bottom:6px}
+  .head img{height:46px;background:#fff;border-radius:8px;padding:3px 8px;border:1px solid var(--line)}
+  .head h1{font-size:22px;margin:0}
+  .head h1 span{color:var(--nv)}
+  .sub{color:var(--mut);font-size:13px;margin:0 0 16px}
+  .bar{display:flex;gap:8px;align-items:center;margin:0 0 18px;flex-wrap:wrap}
+  .bar label{font-size:13px;color:var(--mut)}
+  .bar input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;min-width:260px}
+  .bar button{border:0;background:var(--nv);color:#08210b;font-weight:700;border-radius:8px;padding:9px 14px;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;
+    text-align:center;break-inside:avoid;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .card .ic{font-size:26px}
+  .card h2{margin:0;font-size:18px}
+  .card .tag{color:var(--mut);font-size:12px;min-height:32px;line-height:1.35}
+  .card .qr{width:200px;height:200px;background:#fff;padding:6px;border-radius:8px}
+  .card .qr img,.card .qr canvas{display:block;width:100%;height:100%}
+  .card .url{font-size:10px;color:#9aa0ab;word-break:break-all}
+  .card .scan{font-size:12px;font-weight:700;color:var(--rp)}
+  .foot{margin-top:18px;color:var(--mut);font-size:12px;text-align:center}
+  @media print{
+    body{background:#fff}
+    .bar,.noprint{display:none!important}
+    .page{max-width:none;padding:0}
+    .grid{gap:10px}
+    .card{border:1px dashed #bbb}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <img src="/rptech.jpg" alt="RP tech">
+    <div>
+      <h1>Scan a demo &nbsp;·&nbsp; <span>Edge AI Perception Station</span></h1>
+      <p class="sub">Point your phone camera at a code to open that demo live on this Jetson. (Join the booth Wi‑Fi first.)</p>
+    </div>
+  </div>
+
+  <div class="bar noprint">
+    <label>Booth address:</label>
+    <input id="addr" placeholder="e.g. 192.168.3.224:8000 or booth.local:8000">
+    <button onclick="build()">Regenerate</button>
+    <button onclick="window.print()">Print</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="foot">Intel RealSense · NVIDIA Jetson · on‑device / offline &nbsp;·&nbsp; RP tech (Rashi Peripherals Limited)</div>
+</div>
+
+<script src="/vendor/qrcode.min.js"></script>
+<script>
+  const DEMOS = [
+    {mode:'safety',    ic:'🛡️', name:'Safety Zone', tag:'People‑aware safety zone — the screen reacts as you approach.'},
+    {mode:'dimension', ic:'🔬', name:'Inspect',     tag:'Non‑contact depth measurement + surface quality check.'},
+    {mode:'boxscan',   ic:'📦', name:'Box Vol',     tag:'Automatic parcel dimensioning — L×W×H + volume.'},
+    {mode:'face',      ic:'👋', name:'Greet',       tag:'Face recognition with depth anti‑spoofing, private on‑device.'},
+    {mode:'cloud',     ic:'🧊', name:'3D Scan',     tag:'Live 3D room reconstruction you can orbit.'},
+    {mode:'detect',    ic:'🔎', name:'AI Detect',   tag:'Open‑vocabulary detection — find any object by text.'},
+    {mode:'assistant', ic:'🎙️', name:'Product AI',  tag:'Voice product assistant — ask about any product.'},
+    {mode:'about',     ic:'☁️', name:'Platform',    tag:'NVIDIA cloud‑to‑edge — how it all runs on this Jetson.'},
+  ];
+  const addr = document.getElementById('addr');
+  addr.value = location.host;                     // default to however this page was opened
+  function base(){
+    let a = (addr.value || location.host).trim().replace(/^https?:\/\//,'').replace(/\/+$/,'');
+    return 'http://' + a;
+  }
+  function build(){
+    const grid = document.getElementById('grid'); grid.innerHTML = '';
+    DEMOS.forEach(d => {
+      const url = base() + '/?tab=' + d.mode;
+      const card = document.createElement('div'); card.className = 'card';
+      card.innerHTML = '<div class="ic">' + d.ic + '</div>'
+        + '<h2>' + d.name + '</h2>'
+        + '<div class="tag">' + d.tag + '</div>'
+        + '<div class="qr"></div>'
+        + '<div class="scan">SCAN TO OPEN</div>'
+        + '<div class="url">' + url + '</div>';
+      grid.appendChild(card);
+      new QRCode(card.querySelector('.qr'), {text:url, width:200, height:200,
+        colorDark:'#111111', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M});
+    });
+  }
+  build();
+</script>
+</body>
+</html>

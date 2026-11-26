@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+# CUDA-accelerated RealSense image for the Orin NX.
+# Builds librealsense with -DBUILD_WITH_CUDA so rs.align (depth->color) and the
+# point-cloud run on the GPU instead of the CPU -> smooth 720p.
+#
+#   docker build --network=host -f Dockerfile.cuda -t realsense-cuda:demo .
+#   (run with `--runtime nvidia` so the container reaches the GPU)
+# ---------------------------------------------------------------------------
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH=/usr/local/cuda/bin:${PATH}
+ENV CUDACXX=/usr/local/cuda/bin/nvcc
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git cmake build-essential pkg-config ca-certificates \
+      libssl-dev libusb-1.0-0-dev libudev-dev \
+      python3 python3-dev python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# OpenCV 4.8 (CPU DNN for YuNet/SFace) + numpy, matching the booth/reception.
+# Purge any apt opencv/numpy so the pip versions win (avoids the numpy-too-old
+# "_DTypeMeta not subscriptable" clash seen on the lean build).
+# l4t-jetpack ships numpy 1.21.5 (not as python3-numpy, so apt purge misses it);
+# it's too old for cv2 4.8's typing. Nuke it and force a >=1.26 wheel.
+RUN apt-get purge -y python3-opencv python3-numpy 2>/dev/null || true; \
+    rm -rf /usr/lib/python3/dist-packages/numpy* 2>/dev/null || true; \
+    pip3 install --no-cache-dir --ignore-installed "numpy>=1.26,<2" "opencv-python-headless==4.8.1.78" cryptography \
+    && python3 -c "import numpy,cv2;print('numpy',numpy.__version__,'| cv2',cv2.__version__);assert int(numpy.__version__.split('.')[1])>=24,'numpy too old';assert hasattr(cv2,'FaceDetectorYN_create') and hasattr(cv2,'FaceRecognizerSF_create')"
+
+# ---- librealsense + python bindings, CUDA on, RSUSB backend ----
+ARG LRS_VERSION=v2.55.1
+RUN git clone --depth 1 --branch ${LRS_VERSION} \
+        https://github.com/IntelRealSense/librealsense /tmp/lrs \
+    && cd /tmp/lrs && mkdir build && cd build \
+    && cmake .. \
+        -DFORCE_RSUSB_BACKEND=true \
+        -DBUILD_WITH_CUDA=true \
+        -DCMAKE_CUDA_ARCHITECTURES=87 \
+        -DBUILD_PYTHON_BINDINGS=true \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_EXAMPLES=false \
+        -DBUILD_GRAPHICAL_EXAMPLES=false \
+        -DPYTHON_EXECUTABLE=$(which python3) \
+    && make -j"$(nproc)" && make install && ldconfig \
+    # librealsense installs only pyrsutils + cmake cfg, not the main module or an
+    # __init__.py -> install them ourselves and hard-verify the real symbols.
+    && cp -v "$(find /tmp/lrs/build -name 'pyrealsense2.cpython-*.so' | head -1)" \
+             /usr/lib/python3/dist-packages/pyrealsense2/ \
+    && printf 'from .pyrealsense2 import *\n' \
+             > /usr/lib/python3/dist-packages/pyrealsense2/__init__.py \
+    && python3 -c "import pyrealsense2 as rs; \
+assert all(hasattr(rs,a) for a in ('align','pipeline','config','stream','pointcloud','context')), \
+'pyrealsense2 binding INCOMPLETE'; print('pyrealsense2 FULL OK (CUDA build)')" \
+    && rm -rf /tmp/lrs
+
+ENV PYTHONPATH=/usr/local/lib:/usr/lib/python3/dist-packages
+WORKDIR /app
+
+RUN python3 -c "import pyrealsense2 as rs, cv2, numpy, cryptography; \
+assert all(hasattr(rs,a) for a in ('align','pipeline','config','stream','pointcloud','context')), 'pyrealsense2 INCOMPLETE'; \
+assert hasattr(cv2,'FaceDetectorYN') and hasattr(cv2,'FaceRecognizerSF'), 'OpenCV missing face APIs'; \
+print('OK | CUDA image | pyrealsense2 align+pointcloud present | cv2', cv2.__version__)"
+
+# station.py, web/, models/ are bind-mounted at run time (-v .:/app).
+CMD ["python3", "station.py"]

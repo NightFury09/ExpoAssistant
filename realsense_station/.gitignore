@@ -1,0 +1,14 @@
+# Visitor data: face embeddings, captured leads (names/emails/phones) and the
+# key that encrypts them. Never commit these.
+data/
+*.db
+*.db-journal
+key.bin
+leads.csv
+
+# Face models (38 MB, downloaded separately; see README.md)
+models/
+
+# Build output and caches
+*.log
+__pycache__/

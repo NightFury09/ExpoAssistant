@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RealSense × NVIDIA — Edge AI Perception Station</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <img class="rplogo" src="/rptech.jpg" alt="RP tech — Rashi Peripherals">
+    <div class="brand">Intel <b>RealSense</b> × <b>NVIDIA</b> — Edge AI Perception Station</div>
+    <div class="badge">NVIDIA JETSON · ON-DEVICE</div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-mode="safety"><span class="i">🛡️</span>Safety Zone</button>
+    <button class="tab" data-mode="dimension"><span class="i">🔬</span>Inspect</button>
+    <button class="tab" data-mode="boxscan"><span class="i">📦</span>Box Vol</button>
+    <button class="tab" data-mode="face"><span class="i">👋</span>Greet</button>
+    <button class="tab" data-mode="cloud"><span class="i">🧊</span>3D Scan</button>
+    <button class="tab ai" data-mode="detect"><span class="i">🔎</span>AI Detect</button>
+    <button class="tab" data-mode="assistant"><span class="i">🎙️</span>Product AI</button>
+    <button class="tab" data-mode="about"><span class="i">☁️</span>Platform</button>
+  </div>
+
+  <div class="stage">
+    <img id="video" src="/stream" alt="camera">
+    <canvas id="cloud"></canvas>
+    <div class="splitlabel left">ROOM MAP · drag to orbit</div>
+    <div class="splitlabel right">DEPTH MAP</div>
+
+    <div class="detectbar" id="detectbar">
+      <input id="q" placeholder="Find anything… e.g. bottle, laptop, phone" autocomplete="off">
+      <button onclick="setQuery()">Find</button>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="valcap" id="valcap"></div>
+    <div class="perfbadge" id="perfbadge"></div>
+
+    <!-- attract / idle mode: the live demo keeps playing behind this invitation -->
+    <div class="attract" id="attract">
+      <div class="ainner">
+        <div class="aeyebrow">● LIVE · ON-DEVICE AI · NVIDIA JETSON</div>
+        <h1>See edge AI in real time</h1>
+        <p id="attractsub">Measure a box · scan the room in 3D · ask about any product</p>
+        <div class="atouch">Touch a tab to explore →</div>
+      </div>
+    </div>
+
+    <div id="assistant" class="apanel">
+      <div class="ahead">
+        <h2>Voice product assistant <span class="rover">“OK Rover”</span></h2>
+        <div class="aright">
+          <a id="launchBtn" class="launch" target="_blank" rel="noopener">Open assistant ↗</a>
+          <div class="qrbox"><div id="qrcode"></div>
+            <span class="qrcap">Scan to open<br>on your phone</span></div>
+        </div>
+      </div>
+      <div id="prodgrid" class="prodgrid"></div>
+      <p class="anote">Runs on this Jetson · HTTPS :5001 · same booth Wi-Fi · accept the certificate once.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="flow">
+      <b>Cloud → Edge:</b>
+      <span class="step">Train in NVIDIA Cloud</span><span class="arrow">→</span>
+      <span class="step">Optimize (TensorRT)</span><span class="arrow">→</span>
+      <span class="step">Run on this Jetson, offline</span>
+    </div>
+    <div class="right">
+      <span class="stat" id="stat"></span>
+      <a class="leadbtn" href="/leads.csv" download title="Download captured leads (CSV)">Leads ⬇</a>
+      <button onclick="forget()">Forget me</button>
+      <button onclick="wipe()">Wipe all</button>
+    </div>
+  </div>
+</div>
+
+<!-- enroll modal -->
+<div class="modal" id="enroll">
+  <div class="card">
+    <h2>👋 New here?</h2>
+    <p>We'll greet you by name when you return. A local, encrypted signature
+       (no photo) is stored for today's demo only. Company &amp; email are optional —
+       leave them and our team can follow up.</p>
+    <input id="name" placeholder="Your name" autocomplete="off">
+    <input id="company" placeholder="Company (optional)" autocomplete="off">
+    <input id="email" placeholder="Email (optional)" autocomplete="off" inputmode="email">
+    <input id="phone" placeholder="Phone (optional)" autocomplete="off" inputmode="tel">
+    <button class="save" onclick="save()">Save &amp; greet me next time</button>
+    <button class="skip" onclick="skip()">No thanks</button>
+  </div>
+</div>
+
+<!-- about / NVIDIA panel -->
+<div class="modal" id="about">
+  <div class="card wide">
+    <span class="x" onclick="closeAbout()">✕</span>
+    <h2>☁️ NVIDIA cloud-to-edge, running right here</h2>
+    <p>Every mode in this station runs <b>locally on an NVIDIA Jetson</b> — no
+       internet, no data leaving the booth. That is the edge end of NVIDIA's
+       platform:</p>
+    <div class="pipe">
+      <div class="b cloud"><div class="t">① NVIDIA Cloud</div>
+        <small>Pretrained models &amp; GPUs — NGC catalog, DGX Cloud, TAO Toolkit — to train &amp; curate.</small></div>
+      <div class="ar">→</div>
+      <div class="b"><div class="t">② Optimize</div>
+        <small>Compile to <b>TensorRT</b> engines for real-time speed on the device.</small></div>
+      <div class="ar">→</div>
+      <div class="b edge"><div class="t">③ This Jetson (Edge)</div>
+        <small>Runs offline, private, low-latency — what you're watching now.</small></div>
+    </div>
+    <p>On-device AI here includes:
+      <span class="tag blue">NanoOWL open-vocab detection</span>
+      <span class="tag">SFace recognition</span>
+      <span class="tag">Depth liveness</span>
+      <span class="tag">Live 3D reconstruction</span>
+    </p>
+    <div class="sysbar">
+      <div class="syshead">This Jetson, right now — <span>live</span></div>
+      <div class="sysgrid">
+        <div class="sys"><span class="sk">GPU</span><span class="sv" id="sysGpu">—</span><div class="bar"><i id="barGpu"></i></div></div>
+        <div class="sys"><span class="sk">Memory</span><span class="sv" id="sysRam">—</span><div class="bar"><i id="barRam"></i></div></div>
+        <div class="sys"><span class="sk">Temperature</span><span class="sv" id="sysTemp">—</span><div class="bar"><i id="barTemp"></i></div></div>
+      </div>
+      <div class="thermwarn" id="thermwarn"></div>
+      <div class="sysstack" id="sysStack"></div>
+    </div>
+    <p style="color:#5f6472">Intel RealSense D455 depth + RGB · NVIDIA Jetson Orin ·
+       OpenCV · TensorRT · pyrealsense2. The same pipeline scales to robotics
+       (Isaac ROS / nvblox), logistics dimensioning, and safety monitoring.</p>
+  </div>
+</div>
+
+<div class="notice" id="notice"></div>
+
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<script src="/vendor/qrcode.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
